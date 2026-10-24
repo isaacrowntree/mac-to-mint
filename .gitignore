@@ -1,0 +1,13 @@
+# Personal data and large files never go in this repo
+organizado/
+convertidos/
+report/
+home/
+*.iso
+*.deb
+*.mbox
+*.vcf
+*.ics
+*.log
+__pycache__/
+.DS_Store
