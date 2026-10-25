@@ -3,7 +3,7 @@
 # tar, not rsync: this Mac's openrsync can't create filenames with invalid UTF-8 bytes ("Illegal byte sequence").
 #
 # On the old Mac: System Preferences > Sharing > Remote Login on, then authorize a key:
-#   ssh-keygen -t ed25519 -f ~/.ssh/mac-to-mint && ssh-copy-id -i ~/.ssh/mac-to-mint user@ip
+#   ssh-keygen -t ed25519 -f ~/.ssh/mintosh && ssh-copy-id -i ~/.ssh/mintosh user@ip
 # Usage:
 #   BACKUP_DIR=~/backups/<machine> bash 1-backup/backup-over-ssh.sh user@ip [/Volumes/Extra ...]
 # Copies the user's home (minus caches/logs/trash) to $BACKUP_DIR/home, each extra volume to $BACKUP_DIR/<name>,
@@ -11,7 +11,7 @@
 set -uo pipefail
 DEST="${1:?usage: $0 user@ip [/Volumes/Extra ...]}"; shift
 B="${BACKUP_DIR:?set BACKUP_DIR}"
-KEY="${KEY:-$HOME/.ssh/mac-to-mint}"
+KEY="${KEY:-$HOME/.ssh/mintosh}"
 SSH() { ssh -o BatchMode=yes -o IdentitiesOnly=yes -i "$KEY" "$DEST" "$@" 2> >(grep -v -e post-quantum -e "store now" >&2); }
 L="$B/backup.log"
 mkdir -p "$B/home" "$B/extras"

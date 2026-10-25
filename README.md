@@ -1,6 +1,7 @@
-# mac-to-mint
+# mintosh
 
-**An open-source macOS skin for Linux Mint Xfce, plus a kit for moving an old Mac to it without losing anything.**
+**Mint + Macintosh: an open-source macOS skin for Linux Mint Xfce, plus a kit for moving an old Mac to it
+without losing anything.** (Formerly `mac-to-mint`.)
 
 Old Macs that Apple no longer updates still make good computers. These scripts put Linux Mint Xfce on one and
 make it look and work like macOS, so whoever used the Mac doesn't have to relearn it:
@@ -39,7 +40,7 @@ No personal data lives in this repo. Backups go in `$BACKUP_DIR` on the helper M
 
 ### 1. Back up the old Mac (from a helper Mac)
 1. On the old Mac: System Preferences > Sharing > **Remote Login** on.
-2. `ssh-keygen -t ed25519 -f ~/.ssh/mac-to-mint && ssh-copy-id -i ~/.ssh/mac-to-mint user@ip`
+2. `ssh-keygen -t ed25519 -f ~/.ssh/mintosh && ssh-copy-id -i ~/.ssh/mintosh user@ip`
 3. `BACKUP_DIR=~/backups/<machine> bash 1-backup/backup-over-ssh.sh user@ip [/Volumes/<extra partition> ...]`
 4. Verify: compare file counts on both sides, and spot-check checksums of random files.
    Expect a few hundred missing files from caches under `Library/Containers` - fine.

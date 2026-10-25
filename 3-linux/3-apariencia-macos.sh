@@ -256,14 +256,14 @@ for p in $(apple_menus); do
 done
 # Panel text: WhiteSur makes it bold; macOS's menu bar is regular weight (the app name next to the logo stays bold)
 mkdir -p "$HOME/.config/gtk-3.0"; touch "$HOME/.config/gtk-3.0/gtk.css"
-sed -i '/mac-to-mint panel/,/mac-to-mint end/d' "$HOME/.config/gtk-3.0/gtk.css"
+sed -i -e '/mintosh panel/,/mintosh end/d' -e '/mac-to-mint panel/,/mac-to-mint end/d' "$HOME/.config/gtk-3.0/gtk.css"   # (old name too)
 cat >> "$HOME/.config/gtk-3.0/gtk.css" <<'EOF'
-/* mac-to-mint panel */
+/* mintosh panel */
 .xfce4-panel.background, .xfce4-panel.background button, .xfce4-panel.background button.flat { font-weight: 500; }
 /* room around the Apple logo, as on macOS */
 .xfce4-panel.background button#applicationmenu-button,
 .xfce4-panel.background button.flat#applicationmenu-button { padding: 0 14px 0 18px; }   /* beats WhiteSur's button rule */
-/* mac-to-mint end */
+/* mintosh end */
 EOF
 # The Gemini button keeps the icon of the .desktop copy the panel made when it was added; refresh it
 [ -s "$I/google-gemini-panel.svg" ] && \

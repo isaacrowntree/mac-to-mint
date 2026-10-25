@@ -8,11 +8,11 @@
 set -euo pipefail
 DEST="${1:?usage: $0 user@ip}"
 B="${BACKUP_DIR:-}"
-KEY="${KEY:-$HOME/.ssh/mac-to-mint}"
+KEY="${KEY:-$HOME/.ssh/mintosh}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 AVATAR="${AVATAR:-/Library/User Pictures/Flowers/Sunflower.heic}"
 [ -z "$B" ] || [ -d "$B/organizado" ] || { echo "Missing $B/organizado (run 2-organize/organize.py first)"; exit 1; }
-[ -f "$KEY" ] || ssh-keygen -q -t ed25519 -N "" -C mac-to-mint -f "$KEY"
+[ -f "$KEY" ] || ssh-keygen -q -t ed25519 -N "" -C mintosh -f "$KEY"
 SSH=(ssh -o IdentitiesOnly=yes -i "$KEY")
 
 if ! "${SSH[@]}" -o BatchMode=yes -o ConnectTimeout=5 "$DEST" true 2>/dev/null; then
