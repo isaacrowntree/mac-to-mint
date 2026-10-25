@@ -1,14 +1,9 @@
 #!/usr/bin/env bash
 # Inside the test machine, as root: start a 1366x768 (MacBook Air 11") Xfce desktop for user alex on display :0,
-# on a dummy video card with libinput, so the test (test/mintosh-test.py) can drive it.
+# on a dummy video card, so the test (test/mintosh-test.py) can drive it.
 # Watch it over VNC: open vnc://mintosh-test.orb.local:5900 in Finder (no password; reachable only from this Mac).
 set -euo pipefail
 U="${TEST_USER:-alex}"
-# The machine's /dev is a small tmpfs where only the first two /dev/input/event nodes appear; the test's virtual
-# keyboard, trackpad and mouse plus Toshy's own keyboard need more, or Xorg can't open them. Make them up front.
-for n in $(seq 0 31); do
-  [ -e "/dev/input/event$n" ] || { mkdir -p /dev/input; mknod -m 660 "/dev/input/event$n" c 13 $((64 + n)); chgrp input "/dev/input/event$n"; }
-done
 mkdir -p /etc/X11/xorg.conf.d
 cat > /etc/X11/mintosh-test.conf <<'X'
 Section "Device"
