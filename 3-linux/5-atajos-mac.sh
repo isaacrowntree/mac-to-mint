@@ -12,4 +12,4 @@ cd "$T" || exit 1
 # (Both are the answers bootstrap.sh normally passes; the installer otherwise stops to ask.)
 python3 ./setup_toshy.py install --skip-update-check --admin-capable yes
 echo
-echo "Done. Log out and back in, then try ⌘C / ⌘V and ⌘Tab. Toshy's icon in the top bar can pause it."
+echo "Done. Restart the computer (Toshy changes input permissions), then try ⌘C / ⌘V and ⌘Tab. Toshy's icon in the top bar can pause it."

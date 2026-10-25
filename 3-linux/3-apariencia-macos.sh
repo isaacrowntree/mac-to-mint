@@ -390,6 +390,52 @@ for d in DOCUMENTS DOWNLOAD PICTURES MUSIC VIDEOS; do
   grep -q "^$u\( \|$\)" "$BM" || echo "$u" >> "$BM"
 done
 
+log "Mission Control: three-finger swipe up (or F3) shows all open windows; pinch with four fingers = Launchpad"
+# rofi's window list as a grid of live window previews (nothing runs while it's closed; -window-thumbnail needs
+# -show-icons or the previews stay blank). Touchegg (script 4) turns trackpad gestures into these commands.
+cat > "$HOME/.local/share/rofi/themes/mission.rasi" <<'EOF'
+* { font: "Inter 11"; background-color: transparent; text-color: #ffffff; }
+window { fullscreen: true; background-color: #1c1c1e; }
+mainbox { children: [ listview ]; padding: 8% 7%; }
+listview { columns: 3; lines: 2; flow: horizontal; fixed-columns: true; spacing: 28px; scrollbar: false; }
+element { orientation: vertical; padding: 8px; spacing: 6px; border-radius: 12px; }
+element selected.normal { background-color: #ffffff2e; }
+element-icon { size: 240px; horizontal-align: 0.5; }
+element-text { horizontal-align: 0.5; text-color: inherit; }
+EOF
+cat > "$B/mission-control" <<'EOF'
+#!/usr/bin/env bash
+# Mission Control-style view of all open windows; one click (or Enter) goes to that window
+pkill -x rofi && exit 0
+exec rofi -show window -show-icons -window-thumbnail -window-format '{t}' -theme mission \
+  -me-select-entry '' -me-accept-entry MousePrimary
+EOF
+chmod +x "$B/mission-control"
+mkdir -p "$HOME/.config/touchegg"
+cat > "$HOME/.config/touchegg/touchegg.conf" <<EOF
+<touchégg>
+  <settings>
+    <property name="animation_delay">150</property>
+    <property name="action_execute_threshold">20</property>
+  </settings>
+  <application name="All">
+    <gesture type="SWIPE" fingers="3" direction="UP">
+      <action type="RUN_COMMAND"><repeat>false</repeat><command>$B/mission-control</command><on>begin</on></action>
+    </gesture>
+    <gesture type="SWIPE" fingers="3" direction="DOWN">
+      <action type="RUN_COMMAND"><repeat>false</repeat><command>pkill -x rofi</command><on>begin</on></action>
+    </gesture>
+    <gesture type="PINCH" fingers="4" direction="IN">
+      <action type="RUN_COMMAND"><repeat>false</repeat><command>$B/launchpad</command><on>begin</on></action>
+    </gesture>
+    <gesture type="PINCH" fingers="4" direction="OUT">
+      <action type="RUN_COMMAND"><repeat>false</repeat><command>pkill -x rofi</command><on>begin</on></action>
+    </gesture>
+  </application>
+</touchégg>
+EOF
+if command -v touchegg >/dev/null; then pkill -x touchegg; (setsid touchegg >/dev/null 2>&1 < /dev/null &); fi
+
 log "Spotlight: ⌘Space (Super+Space) opens a centred search bar for apps and files (rofi: no memory used while closed)"
 mkdir -p "$HOME/.local/share/rofi/themes"
 # macOS Sonoma: 680 px bar a quarter of the way down, magnifier, large light text, results only once you type
@@ -463,8 +509,8 @@ X keyboard-layout /Default/XkbLayout string "es,us"
 X keyboard-layout /Default/XkbVariant string ","
 X keyboard-layout /Default/XkbOptions/Group string "grp:alt_shift_toggle"
 
-log "Mac top-row keys: F3 (Mission Control) = list of open windows, F4 = Launchpad"
-X xfce4-keyboard-shortcuts /commands/custom/XF86LaunchA string "xfdesktop --windowlist"
+log "Mac top-row keys: F3 = Mission Control, F4 = Launchpad"
+X xfce4-keyboard-shortcuts /commands/custom/XF86LaunchA string "$B/mission-control"
 X xfce4-keyboard-shortcuts /commands/custom/XF86LaunchB string "$B/launchpad"
 # Mint opens its menu on a tap of the ⌘ (Super) key; a Mac does nothing, and with ⌘ shortcuts it would pop up
 xfconf-query -c xfce4-keyboard-shortcuts -p /commands/custom/Super_L -r 2>/dev/null || true
