@@ -15,6 +15,16 @@ X() {
 choice="${1:-$(cat "$CFG/appearance-choice" 2>/dev/null || echo auto)}"
 case "$choice" in
   light|dark|auto) ;;
+  --choose)  # the Apple menu's "Appearance…": pick with a small window
+    cur=$(cat "$CFG/appearance-choice" 2>/dev/null || echo auto)
+    if [ "${LANG%%_*}" = es ]; then t="Apariencia"; L="Claro"; D="Oscuro"; A="Automático (claro de día, oscuro de noche)"
+    else t="Appearance"; L="Light"; D="Dark"; A="Auto (light by day, dark at night)"; fi
+    pick=$(zenity --list --radiolist --title="$t" --text="$t" --hide-header --hide-column=2 --width=360 --height=260 \
+      --column="" --column=id --column="" \
+      $([ "$cur" = light ] && echo TRUE || echo FALSE) light "$L" \
+      $([ "$cur" = dark ] && echo TRUE || echo FALSE) dark "$D" \
+      $([ "$cur" = auto ] && echo TRUE || echo FALSE) auto "$A" 2>/dev/null) || exit 0
+    [ -n "$pick" ] && exec "$0" "$pick"; exit 0 ;;
   --watch)  # started at login: re-check the auto choice every 10 minutes
     while sleep 600; do [ "$(cat "$CFG/appearance-choice" 2>/dev/null)" = auto ] && "$0" auto; done; exit 0 ;;
   *) echo "usage: appearance light|dark|auto"; exit 1 ;;
@@ -168,4 +178,8 @@ if [ -n "$first" ]; then
 fi
 # The menu bar reads its colours (gtk.css) and the Apple logo only when it starts
 pgrep -u "$(id -u)" -x xfce4-panel >/dev/null && xfce4-panel -r
+# picom (the glass blur) can abort while the window theme reloads; bring it back
+if [ -f "$HOME/.config/autostart/picom.desktop" ] && command -v picom >/dev/null; then
+  sleep 2; pgrep -u "$(id -u)" -x picom >/dev/null || (setsid picom >/dev/null 2>&1 < /dev/null &)
+fi
 echo "Appearance: $choice ($m)"

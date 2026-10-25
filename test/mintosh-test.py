@@ -189,8 +189,10 @@ def t_launchpad():
     sh("pkill -x xed")
 
     lp_open(); type_text("settings manager"); keys("Return"); time.sleep(2)
-    check("settings panels are not in Launchpad", not running("xfce4-settings-manager"))
-    sh("import -window root /tmp/launchpad-nomatch.png")   # should show no "Failed to execute" error
+    check("it lists what Mint's menu lists, settings too", running("xfce4-settings-manager"))
+    sh("pkill -x xfce4-settings-manager")
+    lp_open(); type_text("zzqx"); keys("Return"); time.sleep(1.5)
+    check("Return with no match runs nothing", "Failed" not in sh("wmctrl -l"))
     lp_open(); keys("Escape"); time.sleep(0.8)
     check("Esc closes it", not running("rofi.*drun"), sh("pgrep -a rofi | cut -c1-80"))
 

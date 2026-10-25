@@ -15,17 +15,16 @@ make it look and work like macOS, so whoever used the Mac doesn't have to relear
 - Black boot screen with an Apple logo, a Sonoma-style login screen
 - Battery warnings, sleep on lid close, and the fixes 2013-2015 MacBooks need to run Linux reliably
 
-![Desktop: Apple menu, global menu with the app's own menus, dock, Finder](docs/screenshots/1-desktop.jpg)
-
-| | |
+| Light | Dark |
 |---|---|
-| ![Apple menu](docs/screenshots/2-apple-menu.jpg) **Apple menu** | ![Spotlight](docs/screenshots/3-spotlight.jpg) **Spotlight** (⌘Space) |
-| ![Launchpad](docs/screenshots/4-launchpad.jpg) **Launchpad** (F4, dock, pinch) | ![Mission Control](docs/screenshots/5-mission-control.jpg) **Mission Control** (three-finger swipe up, F3) |
-| ![Login screen](docs/screenshots/6-login.jpg) **Login screen** | |
+| ![Desktop in light mode: Apple menu, global menu, Finder, Text Editor, glass dock](docs/screenshots/1-desktop.jpg) | ![The same desktop in dark mode](docs/screenshots/1-desktop-dark.jpg) |
+| ![Mission Control with the Spaces bar](docs/screenshots/5-mission-control.jpg) **Mission Control** (three fingers up, F3, Ctrl+↑) | ![Mission Control in dark mode](docs/screenshots/5-mission-control-dark.jpg) |
+| ![Spotlight](docs/screenshots/3-spotlight.jpg) **Spotlight** (⌘Space) | ![Launchpad in dark mode](docs/screenshots/4-launchpad.jpg) **Launchpad** (F4, dock, pinch) |
+| ![Apple menu](docs/screenshots/2-apple-menu.jpg) **Apple menu** | ![Login screen](docs/screenshots/6-login.jpg) **Login screen** |
 
-<sub>Real screenshots from the 2013 MacBook Air at 1366x768. That machine was set up with Spanish as a second language,
-which is why the menus are in Spanish; by default everything is English.
-Finder's sidebar is hidden and the login screen shows a demo account.</sub>
+<sub>Screenshots at 1366x768 (MacBook Air 11"): the desktop, Mission Control, Spotlight and Launchpad from the
+OrbStack test machine; the Apple menu and login screen from the 2013 MacBook Air, set up with Spanish as a second
+language (by default everything is English) and showing a demo account.</sub>
 
 It all runs on a 4 GB, 2013 MacBook Air: the search and launcher windows only exist while open, so nothing extra
 sits in memory. The look comes from the excellent [MacTahoe](https://github.com/vinceliuice/MacTahoe-gtk-theme)
@@ -112,22 +111,24 @@ Keep a second copy of `organized/` + `converted/` before deleting the raw backup
   double-click to zoom, Plank dock on glass (Finder, Launchpad, apps | Downloads, Trash), rotating macOS-style
   wallpapers (a light set and a dark set), glass notifications top right, only files on the desktop, Thunar renamed
   Finder with Finder-like settings.
-- **Appearance:** `appearance light|dark|auto` (also in the app menu as "Appearance: Light/Dark/Auto") switches
+- **Appearance:** Apple menu > Appearance… (or `appearance light|dark|auto`, or "Appearance: Dark" in Spotlight) switches
   everything that has two looks: theme, icons, window borders, menu bar text and Apple logo, dock, Spotlight,
   Launchpad, Mission Control, notifications, wallpapers, and apps that follow the system colour scheme (Chrome,
   LibreOffice, GTK 4). Auto is light 7:00-19:00. `APPEARANCE=dark bash 3-macos-look.sh` picks it at install.
 - **Glass:** picom replaces xfwm's compositor and blurs what is behind translucent windows (dual-Kawase on a real
   GPU, a lighter blur without one), with rounded window corners and macOS-like shadows.
 - **Menu bar:** no bar of its own, as in macOS Tahoe: text and icons on the wallpaper with a faint shade. Apple menu (Xfce's Applications Menu on a custom `.menu` file: About This Computer, System
-  Settings, App Store, Force Quit, Sleep, Restart, Shut Down, Lock Screen, Log Out, with separators), then the
+  Settings, Appearance, App Store, Force Quit, Sleep, Restart, Shut Down, Lock Screen, Log Out, with separators), then the
   global menu (`xfce4-appmenu-plugin`: active app's name in bold + its File/Edit/View menus, out of the window;
   works for Chrome, LibreOffice and GTK apps). Right side as on macOS: keyboard layout, tray icons, Wi-Fi, volume,
   battery %, "Sun 25 Oct 3:42 PM", Search, Gemini. Regular-weight text. Mint's Firefox/Terminal/Files
   launchers, show-desktop, window buttons and Languages button are removed.
 - **Spotlight (⌘Space) and Launchpad (F4, dock):** rofi, not Ulauncher: it starts on demand and exits, so it uses no
   memory while closed (Ulauncher stays resident, ~100 MB+, too much for 4 GB). Spotlight: Sonoma-style bar, results
-  appear once you type, apps then the user's files. Launchpad: full-screen grid on the blurred wallpaper; one click opens.
-- **Keys:** Toshy gives ⌘C/⌘V/⌘Q/⌘W/⌘Tab; ⌘⇧3 / ⌘⇧4 save screenshots to the Desktop. Tapping ⌘ alone does nothing.
+  appear once you type, apps then the user's files. Launchpad: full-screen grid on the blurred wallpaper with the same
+  apps as Mint's menu; one click opens, a click outside closes. Both only start installed apps: Return with no match
+  does nothing (`bin/open-app`) instead of running the typed text.
+- **Keys:** Toshy gives ⌘C/⌘V/⌘Q/⌘W/⌘Tab; ⌘⇧3 / ⌘⇧4 save "Screenshot <date> at <time>.png" to the Desktop, no dialog. Tapping ⌘ alone does nothing.
 - **Boot and login:** black screen with a white Apple logo and progress bar (Plymouth script theme), GRUB menu hidden
   (Shift/Esc shows it); a Sonoma-style login screen (lightdm-gtk-greeter): big date and time at the top, a round
   account picture, the name and a translucent password field at the bottom of the blurred wallpaper. The picture
@@ -164,6 +165,11 @@ Script 4 writes `/etc/tlp.d/90-apple.conf` (`SATA_LINKPWR_ON_BAT=max_performance
 power saving off) on Apple hardware.
 
 `libata.force=noncq,1.5Gbps` is **not** needed - with the two options above the SSD runs at 6 Gb/s with NCQ.
+
+## Known issues
+- The global menu (`xfce4-appmenu-plugin` 0.7.6, Ubuntu 24.04's) sometimes crashes when a Chrome window moves to
+  another desktop. The panel restarts it on its own; if it crashes twice in a row the panel asks whether to restart
+  it - say yes.
 
 ## Lessons
 - Run scripts that change the desktop (panel, dock) inside the session, not over SSH: an SSH-started panel or

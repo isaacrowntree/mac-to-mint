@@ -79,7 +79,7 @@ def app_name(w):
         for group in Gio.DesktopAppInfo.search(k):
             for desktop_id in group:
                 info = Gio.DesktopAppInfo.new(desktop_id)
-                if not info:
+                if not info or info.get_nodisplay():   # hidden helpers share the exe (thunar -B = Bulk Rename)
                     continue
                 exe = os.path.basename((info.get_commandline() or "").split(" ")[0]).lower()
                 if k in ((info.get_startup_wm_class() or "").lower(), exe, desktop_id[:-8].lower()):

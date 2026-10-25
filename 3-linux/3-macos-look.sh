@@ -31,6 +31,11 @@ I="$HOME/.local/share/icons/hicolor/scalable/apps"; A="$HOME/.local/share/applic
 mkdir -p "$I" "$A" "$B" "$HOME/.local/share/mintosh" "$HOME/.config/autostart"
 DESK="$(xdg-user-dir DESKTOP)"
 
+# Script 4 installs these too, but the look below needs them now: picom for the glass blur (without it at this point
+# the blur is never set up), Wnck for Mission Control, rofi for Spotlight and Launchpad
+need=""; for p in picom rofi gir1.2-wnck-3.0 wmctrl xdotool; do dpkg -s "$p" >/dev/null 2>&1 || need="$need $p"; done
+if [ -n "$need" ]; then log "Install:$need (asks for your password)"; sudo apt-get install -y $need; fi
+
 log "Download the MacTahoe theme, icons and cursors (vinceliuice's macOS Tahoe recreation) and macOS-style wallpapers"
 for r in MacTahoe-gtk-theme MacTahoe-icon-theme WhiteSur-wallpapers; do
   [ -d "$T/$r" ] || git clone -q --depth 1 "https://github.com/vinceliuice/$r.git" "$T/$r"
@@ -84,7 +89,7 @@ fading = true; fade-delta = 6; fade-in-step = 0.06; fade-out-step = 0.06;
 EOF
   printf '[Desktop Entry]\nType=Application\nName=Glass effects (picom)\nExec=picom\nNoDisplay=true\n' \
     > "$HOME/.config/autostart/picom.desktop"
-  pgrep -x picom >/dev/null || (setsid picom >/dev/null 2>&1 < /dev/null &)
+  pkill -u "$(id -u)" -x picom; sleep 1; (setsid picom >/dev/null 2>&1 < /dev/null &)   # (re)start on the new config
 else
   X xfwm4 /general/use_compositing bool true
 fi
@@ -114,6 +119,7 @@ am() {  # file, English name, Spanish name, command, icon (monochrome, like the 
 }
 am about     "About This Computer" "Acerca de este equipo"      "$B/about-this-computer"                   help-about-symbolic
 am settings  "System Settings…"    "Configuración del sistema…" xfce4-settings-manager           emblem-system-symbolic
+am look      "Appearance…"         "Apariencia…"                "$B/appearance --choose"         weather-clear-symbolic
 am store     "App Store…"          "Tienda de aplicaciones…"    mintinstall                      system-software-install-symbolic
 am forcequit "Force Quit…"         "Forzar salida…"             xfce4-taskmanager                process-stop-symbolic
 am sleep     "Sleep"               "Reposo"                     "xfce4-session-logout --suspend" weather-clear-night-symbolic
@@ -132,6 +138,7 @@ put "$APPLE_MENU" <<EOF
     <Filename>about.desktop</Filename>
     <Separator/>
     <Filename>settings.desktop</Filename>
+    <Filename>look.desktop</Filename>
     <Filename>store.desktop</Filename>
     <Separator/>
     <Filename>forcequit.desktop</Filename>
@@ -512,5 +519,9 @@ printf '[Desktop Entry]\nType=Application\nName=Appearance: Light\nExec=%s light
 printf '[Desktop Entry]\nType=Application\nName=Appearance: Dark\nExec=%s dark\nIcon=weather-clear-night-symbolic\nCategories=Settings;\n' "$B/appearance" > "$A/appearance-dark.desktop"
 printf '[Desktop Entry]\nType=Application\nName=Appearance: Auto\nExec=%s auto\nIcon=preferences-desktop-theme-symbolic\nCategories=Settings;\n' "$B/appearance" > "$A/appearance-auto.desktop"
 FORCE=1 "$B/appearance" "${APPEARANCE:-auto}"
+# The window manager and panel reloads above can take picom down with them; bring it back
+if command -v picom >/dev/null; then
+  sleep 2; pgrep -u "$(id -u)" -x picom >/dev/null || (setsid picom >/dev/null 2>&1 < /dev/null &)
+fi
 
 log "Done. Log out and back in to see everything applied."

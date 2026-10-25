@@ -47,7 +47,6 @@ rofi -show drun -show-icons -drun-use-desktop-cache -drun-display-format '{name}
   -drun-match-fields name,generic,keywords -sort -sorting-method fzf \
   -run-command "$HOME/.local/bin/open-app {cmd}" \
   -kb-cancel "Escape,Control+g,Control+bracketleft,XF86LaunchB" \
-  -drun-categories Office,Network,Graphics,AudioVideo,Audio,Video,Game,Education,Utility \
   -theme-str "entry { placeholder: \"$ph\"; }"
 [ -n "$bgpid" ] && kill "$bgpid" 2>/dev/null
 exit 0
