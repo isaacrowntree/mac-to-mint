@@ -123,7 +123,7 @@ cat > "$LT/gtk.css" <<'EOF'
 #clock_menuitem label { color: rgba(255, 255, 255, 0.95); font-size: 26px; font-weight: 600; }   /* macOS's big clock (the greeter takes no markup: one size) */
 #login_window, #login_window > *, #content_frame, #buttonbox_frame, #greeter_infobar {
   background: transparent; border: none; box-shadow: none; }
-/* her name, under the picture: plain white text, not a drop-down button */
+/* the name, under the picture: plain white text, not a drop-down button */
 #user_combobox, #user_combobox *, combobox#user_combobox box.linked > button.combo, combobox#user_combobox button.combo:hover {
   background: none; background-color: transparent; background-image: none; border: none; box-shadow: none; outline: none; }
 #user_combobox label, #user_combobox cellview, #user_combobox button.combo cellview {

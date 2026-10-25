@@ -104,7 +104,7 @@ for p, rel in walk(os.path.join(H, "Documents")):
     elif os.sep in rel and PHOTO_DIR.search(top):
         add(10, p, os.path.join("Pictures", rel))
     else:
-        add(10, p, os.path.join("Documents", rel))  # incl. loose scans like cédula / registro civil
+        add(10, p, os.path.join("Documents", rel))
 
 # --- Air Photos library originals (already extracted) + Photo Booth (prio 20)
 for p, rel in walk(os.path.join(CONV, "fotos-de-la-fototeca")):

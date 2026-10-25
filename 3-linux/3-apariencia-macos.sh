@@ -185,7 +185,7 @@ for p in $(xfconf-query -c xfce4-desktop -l | grep -E "workspace[0-9]+/last-imag
   X xfce4-desktop "$b/backdrop-cycle-random-order" bool true
 done
 
-log "Desktop: only her own files (no Home / File System / Trash icons), external drives still shown"
+log "Desktop: only the user's own files (no Home / File System / Trash icons), external drives still shown"
 X xfce4-desktop /desktop-icons/style int 2
 X xfce4-desktop /desktop-icons/file-icons/show-home bool false
 X xfce4-desktop /desktop-icons/file-icons/show-filesystem bool false
@@ -232,7 +232,7 @@ StartupNotify=false
 EOF
 
 log "Menu bar right side like macOS Sierra: ES/US, Wi-Fi, volume, battery %, 'Sat 25 Oct 3:42 PM', Search, Gemini (where Siri was)"
-# Search (magnifier, opens Spotlight) and Gemini buttons at the far right, as Spotlight and Siri were on her Mac
+# Search (magnifier, opens Spotlight) and Gemini buttons at the far right, as Spotlight and Siri were on macOS 10.12
 for f in "spotlight:$B/spotlight" "gemini:gemini.google.com"; do
   grep -qs "^Exec=.*${f#*:}" "$HOME"/.config/xfce4/panel/launcher-*/*.desktop \
     || { xfce4-panel --add=launcher "$A/${f%%:*}.desktop"; sleep 1; }
@@ -381,7 +381,7 @@ X thunar /misc-folders-first bool true
 X thunar /misc-thumbnail-mode string THUNAR_THUMBNAIL_MODE_ALWAYS
 X thunar /last-location-bar string ThunarLocationButtons
 X thunar /last-side-pane string ThunarShortcutsPane
-# Called Finder, as on her Mac (the menu bar shows "Finder" instead of "Gestor de archivos Thunar")
+# Called Finder, as on a Mac (the menu bar shows "Finder" instead of "Gestor de archivos Thunar")
 sed -E '/^(Name|GenericName)(\[[^]]*\])?=/d; s/^\[Desktop Entry\]$/&\nName=Finder/' /usr/share/applications/thunar.desktop \
   > "$A/thunar.desktop"
 BM="$HOME/.config/gtk-3.0/bookmarks"; mkdir -p "${BM%/*}"; touch "$BM"
@@ -470,7 +470,7 @@ element-text { text-color: inherit; vertical-align: 0.5; highlight: bold; }   /*
 EOF
 cat > "$B/spotlight-files" <<'EOF'
 #!/usr/bin/env bash
-# rofi script mode: lists her documents, photos, music and videos; opens the chosen one.
+# rofi script mode: lists the user's documents, photos, music and videos; opens the chosen one.
 # Listing takes ~1 s on this Mac, so Spotlight shows the list from the last time and refreshes it in the background.
 if [ -n "${ROFI_INFO:-}" ]; then setsid xdg-open "$ROFI_INFO" >/dev/null 2>&1 & exit 0; fi
 C="$HOME/.cache/spotlight-files"
@@ -619,7 +619,7 @@ for prof in ("Default",):
             == (want, want, blocked):
         continue
     intl["accept_languages"] = intl["selected_languages"] = want
-    # No "Translate this page?" pop-up for her two languages; the Translate icon in the address bar still works
+    # No "Translate this page?" pop-up for the two system languages; the Translate icon in the address bar still works
     d["translate_blocked_languages"] = blocked
     json.dump(d, open(p + ".tmp", "w"))
     os.replace(p + ".tmp", p)

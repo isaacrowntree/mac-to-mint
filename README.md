@@ -1,8 +1,26 @@
 # mac-to-mint
 
-Turn an old Mac (stuck on an unsupported macOS) into a Linux Mint Xfce machine that looks and feels like macOS,
-keeping the owner's files. Built for a 2013 MacBook Air (MacBookAir6,1, macOS 10.12) owned by a Spanish-speaking,
-non-technical user; the steps and scripts are meant to be reused for other old Macs.
+**An open-source macOS skin for Linux Mint Xfce, plus a kit for moving an old Mac to it without losing anything.**
+
+Old Macs that Apple no longer updates still make good computers. These scripts put Linux Mint Xfce on one and
+make it look and work like macOS, so whoever used the Mac doesn't have to relearn it:
+
+- Apple menu, a global menu bar (the app's name and its File/Edit/View menus at the top), macOS-ordered status icons
+- Dock, Spotlight (⌘Space), Launchpad (F4) and Mission Control (three-finger swipe up)
+- ⌘C/⌘V/⌘Q/⌘W/⌘Tab and the other Mac shortcuts, Mac trackpad gestures
+- Black boot screen with an Apple logo, a Sonoma-style login screen
+- Battery warnings, sleep on lid close, and the fixes 2013-2015 MacBooks need to run Linux reliably
+
+It all runs on a 4 GB, 2013 MacBook Air: the search and launcher windows only exist while open, so nothing extra
+sits in memory. The look comes from the excellent [WhiteSur](https://github.com/vinceliuice/WhiteSur-gtk-theme)
+themes and [Toshy](https://github.com/RedBearAK/toshy); this repo wires them, and a lot of small fixes, together.
+
+**Just want the skin?** On any Linux Mint 22 Xfce machine (Mac or not), run scripts 3, 4 and 5 from step 4 below.
+The hardware fixes only switch on when that hardware is present.
+
+**Status:** tested end to end on one MacBookAir6,1 (2013) with Mint 22.3 Xfce, in English and Spanish. Other
+models and versions should mostly work but are untested - issues and pull requests welcome. Script names and some
+folder names are in Spanish because the first user was Spanish-speaking; the system itself starts in English.
 
 No personal data lives in this repo. Backups go in `$BACKUP_DIR` on the helper Mac (e.g. `~/backups/<machine>`).
 
@@ -58,6 +76,11 @@ To come back later (re-run scripts 3-5 after changes): `bash tools/servir-acceso
 `wget ... | bash` line to run on the Mint machine (temporary key + password-free sudo + SSH on). Then
 `bash 3-linux/0-enviar-desde-mac.sh user@ip` (no BACKUP_DIR: sends only the scripts), run them, and
 `bash tools/cerrar-acceso.sh user@ip` to undo the access.
+
+> **Safety:** `servir-acceso.sh` serves its script over plain HTTP on your local network, and running it gives the
+> helper Mac SSH access with password-free sudo. Use it only on a network you trust, keep the server running only
+> until the command has been run, and always finish with `cerrar-acceso.sh`. Read the served script before running
+> it - the same goes for any `wget | bash`.
 Keep a second copy of `organizado/` + `convertidos/` before deleting the raw backup.
 
 ## What the scripts set up
@@ -77,16 +100,19 @@ Keep a second copy of `organizado/` + `convertidos/` before deleting the raw bac
   launchers, show-desktop, window buttons and Languages button are removed.
 - **Spotlight (⌘Space) and Launchpad (F4, dock):** rofi, not Ulauncher: it starts on demand and exits, so it uses no
   memory while closed (Ulauncher stays resident, ~100 MB+, too much for 4 GB). Spotlight: Sonoma-style bar, results
-  appear once you type, apps then her files. Launchpad: full-screen grid on the blurred wallpaper; one click opens.
+  appear once you type, apps then the user's files. Launchpad: full-screen grid on the blurred wallpaper; one click opens.
 - **Keys:** Toshy gives ⌘C/⌘V/⌘Q/⌘W/⌘Tab; ⌘⇧3 / ⌘⇧4 save screenshots to the Desktop. Tapping ⌘ alone does nothing.
 - **Boot and login:** black screen with a white Apple logo and progress bar (Plymouth script theme), GRUB menu hidden
-  (Shift/Esc shows it); slick-greeter with a blurred wallpaper, WhiteSur theme and a round macOS account picture
-  (made on the helper Mac from `/Library/User Pictures`, never committed).
-- **Trackpad:** natural scrolling, tap to click, two-finger click = right click.
+  (Shift/Esc shows it); a Sonoma-style login screen (lightdm-gtk-greeter): big date and time at the top, a round
+  account picture, the name and a translucent password field at the bottom of the blurred wallpaper. The picture
+  is one of macOS's own (`AVATAR=`, from `/Library/User Pictures` on the helper Mac), never committed.
+- **Trackpad:** natural scrolling, tap to click, two-finger click = right click; three fingers up/down = Mission
+  Control (live window previews, F3 too); thumb + three fingers pinch = Launchpad, spread = show desktop (Touchegg).
+  One desktop, as a Mac starts with.
 - **Battery:** dims on battery, lid = sleep, sleeps at 5 %, "Low Battery" warnings at 20 % and 10 % (UPower's
   figure, as in the menu bar; the kernel's `capacity` reads lower on this Mac), TLP.
 - **Chrome language:** at each login Chrome's website languages are set from the system language (es-CO first when
-  the system is Spanish) and the Translate pop-up is off for her two languages. Chrome must be closed for this.
+  the system is Spanish) and the Translate pop-up is off for those two languages. Chrome must be closed for this.
 - **Gemini:** Google's assistant as its own app window (Chrome `--app`), with a button at the far right of the menu
   bar where Siri was on macOS 10.12 (sparkle on a white circle so it shows on any wallpaper). There's no
   Gemini desktop app for Linux. Chrome's built-in "Gemini in Chrome" and its dictation into web text boxes
@@ -126,3 +152,28 @@ power saving off) on Apple hardware.
 - lightdm-gtk-greeter: style the password field as `#login_window entry` (its builder ids aren't all widget names),
   and build its theme on GTK's own Adwaita, not WhiteSur, whose entry rules win and leave the dots unreadable.
 - Two copies of `appmenu-gtk-module` (xsettings `/Gtk/Modules` plus `GTK_MODULES`) make Chrome segfault on start.
+
+## Undoing things
+- Login screen: `sudo rm /etc/lightdm/lightdm.conf.d/95-macos-greeter.conf` (back to Mint's slick-greeter).
+- Boot screen: `sudo update-alternatives --config default.plymouth` (pick `mint-logo`), then `sudo update-initramfs -u`;
+  GRUB menu: `sudo rm /etc/default/grub.d/99-macos-boot.cfg && sudo update-grub`.
+- Trackpad: `sudo rm /etc/X11/xorg.conf.d/90-mac-touchpad.conf`. Gestures: `sudo apt remove touchegg`.
+- Mac shortcuts: `python3 ~/.cache/toshy-src/setup_toshy.py uninstall`.
+- Top bar back to Mint's: `xfce4-panel --quit; xfconf-query -c xfce4-panel -p / -R -r; xfce4-panel &` (log out and in).
+- Battery saver: `sudo apt remove tlp`.
+
+## Credits
+Downloaded or installed at run time, not redistributed here:
+[WhiteSur GTK theme, icons, cursors and wallpapers](https://github.com/vinceliuice) (vinceliuice),
+[Toshy](https://github.com/RedBearAK/toshy), [rofi](https://github.com/davatorium/rofi),
+[Touchégg](https://github.com/JoseExposito/touchegg), [vala-panel-appmenu](https://github.com/rilian-la-te/vala-panel-appmenu),
+[Plank](https://launchpad.net/plank), [lightdm-gtk-greeter](https://github.com/Xubuntu/lightdm-gtk-greeter),
+[TLP](https://linrunner.de/tlp/), [facetimehd](https://github.com/patjak/facetimehd), [mbpfan](https://github.com/linux-on-mac/mbpfan),
+and Linux Mint and Xfce themselves. Each keeps its own licence.
+
+## License and trademarks
+The scripts and docs in this repo are MIT-licensed (see `LICENSE`). Apple, the Apple logo, macOS, Mac, MacBook,
+Finder, Spotlight, Launchpad and Mission Control are trademarks of Apple Inc.; Google, Chrome and Gemini are
+trademarks of Google LLC. This project is not affiliated with or endorsed by Apple or Google. The Apple logo is
+taken from the WhiteSur sources at run time and the macOS account picture from the helper Mac's own files; neither
+is stored in this repo. Use it on hardware you own.
