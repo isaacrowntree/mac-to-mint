@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # On THIS Mac: offer temporary SSH + password-free sudo access to a Mint machine on the same network.
 #   bash tools/servir-acceso.sh            # leave running; Ctrl+C when the other machine has run the command
-# On the Mint machine (Terminal), run the curl line it prints; it asks for that user's password once.
+# On the Mint machine (Terminal), run the wget line it prints; it asks for that user's password once.
 # Undo everything afterwards with: bash tools/cerrar-acceso.sh user@ip
 set -euo pipefail
 KEY="${KEY:-$HOME/.ssh/mac-to-mint}"
@@ -29,6 +29,6 @@ EOF
 IP=$(ipconfig getifaddr en0 || ipconfig getifaddr en1)
 echo "On the Mint machine, open Terminal and run:"
 echo
-echo "  curl -fsS http://$IP:$PORT/abrir-acceso.sh | bash"
+echo "  wget -qO- http://$IP:$PORT/abrir-acceso.sh | bash"   # wget: always on Mint, curl may not be
 echo
 cd "$D" && python3 -m http.server "$PORT" --bind 0.0.0.0

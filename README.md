@@ -55,7 +55,7 @@ Then: Timeshift (system only, daily), sign in to Chrome, import Safari bookmarks
 `sudo systemctl disable --now ssh.socket ssh` (Mint 22 listens through `ssh.socket` as well).
 
 To come back later (re-run scripts 3-5 after changes): `bash tools/servir-acceso.sh` on the helper Mac prints a
-`curl ... | bash` line to run on the Mint machine (temporary key + password-free sudo + SSH on). Then
+`wget ... | bash` line to run on the Mint machine (temporary key + password-free sudo + SSH on). Then
 `bash 3-linux/0-enviar-desde-mac.sh user@ip` (no BACKUP_DIR: sends only the scripts), run them, and
 `bash tools/cerrar-acceso.sh user@ip` to undo the access.
 Keep a second copy of `organizado/` + `convertidos/` before deleting the raw backup.
