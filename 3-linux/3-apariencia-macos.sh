@@ -274,10 +274,10 @@ sleep 2   # the panel ignores --add while it is still taking in the launchers ab
 if [ -f /usr/share/xfce4/panel/plugins/appmenu.desktop ]; then
   X xsettings /Gtk/ShellShowsMenubar bool true
   X xsettings /Gtk/ShellShowsAppmenu bool true
-  X xsettings /Gtk/Modules string appmenu-gtk-module
-  # Its systemd unit targets xfce-session.target, which Xfce 4.18 doesn't start; set GTK_MODULES at login instead
-  grep -qs appmenu-gtk-module "$HOME/.xsessionrc" \
-    || echo 'export GTK_MODULES="${GTK_MODULES:+$GTK_MODULES:}appmenu-gtk-module"' >> "$HOME/.xsessionrc"
+  # The module reaches apps through GTK_MODULES, set at login by the package's systemd user unit. Don't also add it
+  # through xsettings /Gtk/Modules or ~/.xsessionrc: loaded twice, it crashes Chrome on start (segfault).
+  xfconf-query -c xsettings -p /Gtk/Modules -r 2>/dev/null || true
+  sed -i '/appmenu-gtk-module/d' "$HOME/.xsessionrc" 2>/dev/null || true
   if [ -z "$(plugins appmenu)" ]; then
     xfce4-panel -r; sleep 5   # a running panel doesn't see plugins installed after it started
     xfce4-panel --add=appmenu; sleep 2
@@ -396,10 +396,11 @@ log "Mission Control: three-finger swipe up or down (or F3) opens and closes a v
 # -show-icons or the previews stay blank). Touchegg (script 4) turns trackpad gestures into these commands.
 cat > "$HOME/.local/share/rofi/themes/mission.rasi" <<'EOF'
 * { font: "Inter 11"; background-color: transparent; text-color: #ffffff; }
-/* not full screen: a margin all round, so clicking outside the windows closes it, as on macOS */
-window { location: center; width: 94%; height: 90%; border-radius: 16px; background-color: #1c1c1ee8; }
-mainbox { children: [ listview ]; padding: 5% 5%; }
-listview { columns: 3; lines: 2; flow: horizontal; fixed-columns: true; spacing: 28px; scrollbar: false; }
+/* only as tall as the rows of windows it shows, so most of the screen is "outside": clicking there closes it
+   (rofi can't close on a click on empty space inside its own window) */
+window { location: center; width: 86%; border-radius: 16px; background-color: #1c1c1ee8; }
+mainbox { children: [ listview ]; padding: 24px; }
+listview { fixed-height: false; columns: 3; lines: 2; flow: horizontal; fixed-columns: true; spacing: 28px; scrollbar: false; }
 element { orientation: vertical; padding: 8px; spacing: 6px; border-radius: 12px; }
 element selected.normal { background-color: #ffffff2e; }
 element-icon { size: 240px; horizontal-align: 0.5; }

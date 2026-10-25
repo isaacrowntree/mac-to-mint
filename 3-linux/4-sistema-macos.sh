@@ -108,6 +108,68 @@ setg cursor-theme-size 32
 setg font-name "Inter 12"
 setg clock-format "%a %-d %b  %-l:%M %p"
 
+# Mint's slick-greeter (above, kept as a fallback) can't be centred and its password dots come out grey on grey.
+# lightdm-gtk-greeter can be placed anywhere and styled with CSS: round picture, name and a translucent
+# pill-shaped password field with white dots, in the middle of the blurred wallpaper, like macOS.
+apt-get install -y lightdm-gtk-greeter
+LT=/usr/share/themes/macOS-Login/gtk-3.0; mkdir -p "$LT"
+cat > "$LT/gtk.css" <<'EOF'
+/* Plain GTK base, not WhiteSur: its entry rules beat these and left the password dots dark grey */
+@import url("resource:///org/gtk/libgtk/theme/Adwaita/gtk-contained.css");
+* { font-family: "Inter"; }
+#panel_window, #panel_window menubar, #panel_window menubar > menuitem {
+  background: transparent; border: none; box-shadow: none; color: #ffffff; }
+#panel_window menubar > menuitem label { color: #ffffff; font-weight: 500; }
+#clock_menuitem label { color: rgba(255, 255, 255, 0.95); font-size: 26px; font-weight: 600; }   /* macOS's big clock (the greeter takes no markup: one size) */
+#login_window, #login_window > *, #content_frame, #buttonbox_frame, #greeter_infobar {
+  background: transparent; border: none; box-shadow: none; }
+/* her name, under the picture: plain white text, not a drop-down button */
+#user_combobox, #user_combobox *, combobox#user_combobox box.linked > button.combo, combobox#user_combobox button.combo:hover {
+  background: none; background-color: transparent; background-image: none; border: none; box-shadow: none; outline: none; }
+#user_combobox label, #user_combobox cellview, #user_combobox button.combo cellview {
+  color: #ffffff; font-size: 17px; font-weight: 600; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); }
+#user_combobox arrow, #user_combobox button.combo arrow { -gtk-icon-source: none; min-width: 0; min-height: 0; opacity: 0; }
+#login_window entry, entry#password_entry, #password_entry { background-color: rgba(255, 255, 255, 0.28); background-image: none; color: #ffffff; caret-color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 16px; min-height: 30px; padding: 0 14px;
+  box-shadow: none; font-size: 15px; }
+#login_window entry:focus, entry#password_entry:focus, #password_entry:focus { border-color: rgba(255, 255, 255, 0.6); box-shadow: none; }
+#login_window entry selection, #password_entry selection { background-color: rgba(255, 255, 255, 0.4); }
+#login_button, #cancel_button { opacity: 0; min-height: 0; padding: 0; margin: 0; }
+#message_label, #greeter_infobar label { color: #ffffff; }
+EOF
+# macOS Sonoma layout: large date and time at the top centre, a small round picture, the name and a password pill
+# at the bottom centre. The greeter always puts its picture left of the fields, so the picture is drawn onto the
+# background instead, its bottom ~14 px above the name (the login box starts at 76 % of the height and its name
+# sits ~34 px below that; checked at 1366x768 in a lightdm --test-mode preview). Made at the screen's own size.
+SCR=$(cat /sys/class/drm/card*-*/modes 2>/dev/null | head -1); SCR=${SCR:-1366x768}
+W=${SCR%x*}; H=${SCR#*x}; LBG="$S/login-blur.jpg"
+if [ -f "/var/lib/AccountsService/icons/$U" ] && [ -f "$S/login-blur.jpg" ]; then
+  convert "$S/login-blur.jpg" -resize "${SCR}^" -gravity center -extent "$SCR" \
+    \( "/var/lib/AccountsService/icons/$U" -resize 96x96 \) -gravity northwest \
+    -geometry "+$(( W / 2 - 48 ))+$(( H * 76 / 100 - 76 ))" -composite "$S/login-mac.jpg" && LBG="$S/login-mac.jpg"
+fi
+cat > /etc/lightdm/lightdm-gtk-greeter.conf <<EOF
+[greeter]
+background=$LBG
+user-background=false
+theme-name=macOS-Login
+icon-theme-name=WhiteSur-light
+cursor-theme-name=WhiteSur-cursors
+cursor-theme-size=32
+font-name=Inter 12
+hide-user-image=true
+position=50%,center 76%,start
+panel-position=top
+indicators=~spacer;~clock;~spacer;~layout;~power
+clock-format=%A %-d %B   %-l:%M
+xft-antialias=true
+xft-hintstyle=hintslight
+xft-rgba=rgb
+EOF
+# Read after Mint's /usr/share/lightdm/lightdm.conf.d/90-slick-greeter.conf; delete this file to go back
+mkdir -p /etc/lightdm/lightdm.conf.d
+printf '[Seat:*]\ngreeter-session=lightdm-gtk-greeter\n' > /etc/lightdm/lightdm.conf.d/95-macos-greeter.conf
+
 AV=mac-assets/avatar.png
 if [ -f "$AV" ]; then
   log "Round account picture (login screen and app menu)"

@@ -121,3 +121,8 @@ power saving off) on Apple hardware.
   menu" while the file is half written.
 - Test changes on the real machine with screenshots: `import -window root` + `convert -crop`, crop on the target so
   only the part being checked leaves the machine.
+- Preview the login screen without logging out: `lightdm --test-mode` from the desktop opens it in a Xephyr
+  window. Put a wrapper named `Xephyr` that adds `-screen 1366x768` first in `PATH` to see it at the real size.
+- lightdm-gtk-greeter: style the password field as `#login_window entry` (its builder ids aren't all widget names),
+  and build its theme on GTK's own Adwaita, not WhiteSur, whose entry rules win and leave the dots unreadable.
+- Two copies of `appmenu-gtk-module` (xsettings `/Gtk/Modules` plus `GTK_MODULES`) make Chrome segfault on start.
