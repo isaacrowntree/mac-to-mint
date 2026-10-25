@@ -22,9 +22,9 @@ make it look and work like macOS, so whoever used the Mac doesn't have to relear
 | ![Spotlight](docs/screenshots/3-spotlight.jpg) **Spotlight** (⌘Space) | ![Launchpad in dark mode](docs/screenshots/4-launchpad.jpg) **Launchpad** (F4, dock, pinch) |
 | ![Apple menu](docs/screenshots/2-apple-menu.jpg) **Apple menu** | ![Login screen](docs/screenshots/6-login.jpg) **Login screen** |
 
-<sub>Screenshots at 1366x768 (MacBook Air 11"): the desktop, Mission Control, Spotlight and Launchpad from the
-OrbStack test machine; the Apple menu and login screen from the 2013 MacBook Air, set up with Spanish as a second
-language (by default everything is English) and showing a demo account.</sub>
+<sub>Screenshots at 1366x768 (MacBook Air 11") from the OrbStack test machine, except the login screen, which is from
+the 2013 MacBook Air (set up with Spanish as a second language; by default everything is English) with a demo
+account.</sub>
 
 It all runs on a 4 GB, 2013 MacBook Air: the search and launcher windows only exist while open, so nothing extra
 sits in memory. The look comes from the excellent [MacTahoe](https://github.com/vinceliuice/MacTahoe-gtk-theme)
@@ -166,10 +166,15 @@ power saving off) on Apple hardware.
 
 `libata.force=noncq,1.5Gbps` is **not** needed - with the two options above the SSD runs at 6 Gb/s with NCQ.
 
-## Known issues
-- The global menu (`xfce4-appmenu-plugin` 0.7.6, Ubuntu 24.04's) sometimes crashes when a Chrome window moves to
-  another desktop. The panel restarts it on its own; if it crashes twice in a row the panel asks whether to restart
-  it - say yes.
+## Known issues (fixed)
+- **The global menu crashed when a Chrome window moved to another desktop** ("plugin unexpectedly left the panel").
+  `xfce4-appmenu-plugin` 0.7.6, the version Ubuntu 24.04 / Mint 22 ship, reads a menu after freeing it when a menu
+  request is cancelled (`get_layout_cb` in `dbusmenu-importer/model.c`). Script 4 rebuilds just that plugin from
+  Ubuntu's own source with a one-function patch, `3-linux/patches/appmenu-get-layout-use-after-free.patch`, and
+  removes the build tools again. An update of the package replaces the rebuilt file.
+- **The glass blur disappeared after the panel restarted.** picom 10.2 (the same releases' version) can abort on an
+  internal check (`!w->mask_image` in `win_bind_mask`) when a window is recreated. It now runs under
+  `bin/glass`, which starts it again within a second after a crash.
 
 ## Lessons
 - Run scripts that change the desktop (panel, dock) inside the session, not over SSH: an SSH-started panel or

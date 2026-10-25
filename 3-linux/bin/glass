@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# picom (the glass blur) with a safety net. picom 10.2, the one Ubuntu 24.04 / Mint 22 ships, can abort on an
+# internal check when a window is recreated (`!w->mask_image` in win_bind_mask, e.g. when the panel restarts) and
+# the glass would stay off until the next login. Start it again instead. A normal stop or a config error ends it.
+while :; do
+  picom "$@"; rc=$?
+  [ "$rc" -eq 134 ] || exit "$rc"   # 134 = aborted (SIGABRT); anything else is deliberate
+  sleep 1
+done

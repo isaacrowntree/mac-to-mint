@@ -1,0 +1,27 @@
+--- a/lib/dbusmenu-importer/model.c	2020-10-29 08:08:48
++++ b/lib/dbusmenu-importer/model.c	2026-10-26 00:56:47
+@@ -432,11 +432,10 @@
+ static void get_layout_cb(GObject *source_object, GAsyncResult *res, gpointer user_data)
+ {
+ 	g_autoptr(GVariant) layout = NULL;
++	g_autoptr(GError) error    = NULL;
+ 	guint revision;
+-	if (!DBUS_MENU_IS_MODEL(user_data))
+-		return;
+-	DBusMenuModel *menu     = DBUS_MENU_MODEL(user_data);
+-	g_autoptr(GError) error = NULL;
++	/* Finish the call before touching user_data: when the menu was finalized its cancellable was cancelled, the
++	 * call ends with G_IO_ERROR_CANCELLED and user_data points to freed memory (even DBUS_MENU_IS_MODEL reads it) */
+ 	dbus_menu_xml_call_get_layout_finish((DBusMenuXml *)(source_object),
+ 	                                     &revision,
+ 	                                     &layout,
+@@ -448,6 +447,9 @@
+ 			g_warning("%s", error->message);
+ 		return;
+ 	}
++	if (!DBUS_MENU_IS_MODEL(user_data))
++		return;
++	DBusMenuModel *menu = DBUS_MENU_MODEL(user_data);
+ 	layout_parse(menu, layout);
+ 	menu->layout_update_in_progress = false;
+ 	if (menu->layout_update_required)

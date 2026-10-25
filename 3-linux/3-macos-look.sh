@@ -87,9 +87,10 @@ shadow-exclude = [ "window_type = 'dock'", "window_type = 'desktop'", "class_g =
                    "class_g = 'Rofi'", "_GTK_FRAME_EXTENTS@:c", "window_type = 'notification'" ];
 fading = true; fade-delta = 6; fade-in-step = 0.06; fade-out-step = 0.06;
 EOF
-  printf '[Desktop Entry]\nType=Application\nName=Glass effects (picom)\nExec=picom\nNoDisplay=true\n' \
+  printf '[Desktop Entry]\nType=Application\nName=Glass effects (picom)\nExec=%s\nNoDisplay=true\n' "$B/glass" \
     > "$HOME/.config/autostart/picom.desktop"
-  pkill -u "$(id -u)" -x picom; sleep 1; (setsid picom >/dev/null 2>&1 < /dev/null &)   # (re)start on the new config
+  pkill -u "$(id -u)" -f "bin/[g]lass"; pkill -u "$(id -u)" -x picom; sleep 1
+  (setsid "$B/glass" >/dev/null 2>&1 < /dev/null &)   # (re)start on the new config
 else
   X xfwm4 /general/use_compositing bool true
 fi
@@ -521,7 +522,7 @@ printf '[Desktop Entry]\nType=Application\nName=Appearance: Auto\nExec=%s auto\n
 FORCE=1 "$B/appearance" "${APPEARANCE:-auto}"
 # The window manager and panel reloads above can take picom down with them; bring it back
 if command -v picom >/dev/null; then
-  sleep 2; pgrep -u "$(id -u)" -x picom >/dev/null || (setsid picom >/dev/null 2>&1 < /dev/null &)
+  sleep 2; pgrep -u "$(id -u)" -x picom >/dev/null || (setsid "$B/glass" >/dev/null 2>&1 < /dev/null &)
 fi
 
 log "Done. Log out and back in to see everything applied."

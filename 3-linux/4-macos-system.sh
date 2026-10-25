@@ -214,4 +214,36 @@ Section "InputClass"
 EndSection
 EOF
 
+log "Global menu: fix its crash when a window's menu goes away (e.g. moving Chrome to another desktop)"
+# xfce4-appmenu-plugin 0.7.6 reads a freed menu in get_layout_cb (dbusmenu-importer/model.c) when a menu request is
+# cancelled; the panel then shows "plugin unexpectedly left the panel". Rebuild just the Xfce plugin from Ubuntu's
+# own source with patches/appmenu-get-layout-use-after-free.patch (translations still come from the package, so
+# the source's translation list, which has a duplicate Ubuntu patches out, is skipped). Only for that exact package version: an update
+# of the package simply replaces the rebuilt file.
+AV=0.7.6+dfsg1-4build4
+AL=/usr/lib/x86_64-linux-gnu/xfce4/panel/plugins/libappmenu-xfce.so
+AM=/var/lib/mintosh/appmenu-fixed
+if [ "$(dpkg-query -W -f='${Version}' xfce4-appmenu-plugin 2>/dev/null)" = "$AV" ] && [ -f "$AL" ] \
+   && ! { [ -f "$AM" ] && [ "$(cat "$AM")" = "$(sha256sum "$AL" | cut -d' ' -f1)" ]; }; then
+  bdeps=""; for p in meson valac gettext libbamf3-dev libgtk-3-dev libxfce4panel-2.0-dev libxfconf-0-dev; do
+    dpkg -s "$p" >/dev/null 2>&1 || bdeps="$bdeps $p"; done
+  W=$(mktemp -d); D=$PWD
+  if apt-get install -y $bdeps \
+     && wget -qO "$W/src.tar.xz" "http://archive.ubuntu.com/ubuntu/pool/universe/v/vala-panel-appmenu/vala-panel-appmenu_${AV%%-*}.orig.tar.xz" \
+     && tar -xJf "$W/src.tar.xz" -C "$W" && cd "$W"/vala-panel-appmenu-* \
+     && patch -p1 < "$D/patches/appmenu-get-layout-use-after-free.patch" \
+     && : > po/LINGUAS \
+     && meson setup build --prefix=/usr -Dwm_backend=bamf -Dxfce=enabled -Dvalapanel=disabled -Dmate=disabled \
+          -Dbudgie=disabled -Dregistrar=disabled -Dappmenu-gtk-module=disabled -Djayatana=disabled >/dev/null \
+     && ninja -C build >/dev/null; then
+    install -m 644 "$(find build -name libappmenu-xfce.so | head -1)" "$AL"
+    mkdir -p "${AM%/*}"; sha256sum "$AL" | cut -d' ' -f1 > "$AM"
+    echo "   fixed; it takes effect when the panel restarts (log out and in)"
+  else
+    echo "!! could not rebuild the global menu plugin - it still works, it may just crash now and then"
+  fi
+  cd "$D"; rm -rf "$W"
+  [ -n "$bdeps" ] && apt-get purge -y $bdeps >/dev/null && apt-get autoremove -y >/dev/null
+fi
+
 log "Done. Log out and back in (trackpad, login screen), restart to see the boot screen."
