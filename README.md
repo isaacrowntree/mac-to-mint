@@ -47,10 +47,17 @@ cd ~/respaldo-mac/3-linux
 sudo bash 1-configurar-sistema.sh     # hardware fixes, languages, Chrome, LibreOffice, fonts, printers... then reboot
 bash 2-restaurar-datos.sh             # organizado/ -> Desktop, Documents, Pictures, Music, Videos
 bash 3-apariencia-macos.sh            # macOS look (run inside the desktop session)
+sudo bash 4-sistema-macos.sh          # boot + login screen, trackpad, battery saving (after script 3)
+bash 5-atajos-mac.sh                  # Mac keyboard shortcuts (Toshy); then log out and back in
 ```
 Then: Timeshift (system only, daily), sign in to Chrome, import Safari bookmarks if needed, delete
 `~/respaldo-mac`, remove the helper key from `~/.ssh/authorized_keys`, and turn SSH off:
 `sudo systemctl disable --now ssh.socket ssh` (Mint 22 listens through `ssh.socket` as well).
+
+To come back later (re-run scripts 3-5 after changes): `bash tools/servir-acceso.sh` on the helper Mac prints a
+`curl ... | bash` line to run on the Mint machine (temporary key + password-free sudo + SSH on). Then
+`bash 3-linux/0-enviar-desde-mac.sh user@ip` (no BACKUP_DIR: sends only the scripts), run them, and
+`bash tools/cerrar-acceso.sh user@ip` to undo the access.
 Keep a second copy of `organizado/` + `convertidos/` before deleting the raw backup.
 
 ## What the scripts set up
@@ -60,8 +67,20 @@ Keep a second copy of `organizado/` + `convertidos/` before deleting the raw bac
   automatic updates, password login (autologin off so the keyring unlocks itself).
 - **macOS look:** WhiteSur theme, `WhiteSur-light` icons (plain `WhiteSur` icons are white and vanish in a light
   menu), cursor, Inter font, top menu bar, window buttons on the left, Plank dock (apps | Downloads, Trash),
-  rotating macOS-style wallpapers + login screen, Super+Space search, volume/brightness pop-ups,
-  F3 = open windows, F4 = app menu.
+  rotating macOS-style wallpapers + login screen, volume/brightness pop-ups, F3 = open windows, F4 = app menu.
+  Apple logo on the menu button; menu bar right side ordered like macOS (ES/US text, Wi-Fi, volume, battery %,
+  "Sat 25 Oct 3:42 PM" at menu size); centred window titles, shadows, double-click to zoom; Finder-like Thunar;
+  only files on the desktop; rounded top-right notifications.
+- **Spotlight:** ⌘Space opens a centred search bar. It's rofi, not Ulauncher: it starts on demand and exits, so it
+  uses no memory while closed (Ulauncher stays resident, ~100 MB+, too much for 4 GB).
+- **Keys:** Toshy gives ⌘C/⌘V/⌘Q/⌘W/⌘Tab; ⌘⇧3 / ⌘⇧4 save screenshots to the Desktop.
+- **Boot and login:** black screen with a white Apple logo and progress bar (Plymouth script theme), GRUB menu hidden
+  (Shift/Esc shows it); slick-greeter with a blurred wallpaper, WhiteSur theme and a round macOS account picture
+  (made on the helper Mac from `/Library/User Pictures`, never committed).
+- **Trackpad:** natural scrolling, tap to click, two-finger click = right click.
+- **Battery:** dims on battery, lid = sleep, sleeps at 5 %, "Low Battery" warnings at 20 % and 10 %, TLP.
+- **Gemini:** Google's assistant as its own app window in the menu (Chrome `--app`); type or use the microphone.
+  The Apple logo and Gemini icon are downloaded at run time (WhiteSur source, gstatic), not stored here.
 
 ## Hardware notes (MacBookAir6,1, 2013) - most apply to 2013-2015 MacBooks
 | Problem | Fix (in `1-configurar-sistema.sh`, gated on the hardware) |
@@ -72,6 +91,10 @@ Keep a second copy of `organizado/` + `convertidos/` before deleting the raw bac
 | No camera (FaceTime HD, `14e4:1570`) | `facetimehd` driver + firmware via DKMS |
 | Runs hot | `mbpfan` |
 | Top-row keys | work by default (`hid_apple fnmode=3`); pop-ups need enabling (script 3) |
+
+**TLP undoes the SATA fix** unless told not to: its defaults turn SATA link power management back on on battery.
+Script 4 writes `/etc/tlp.d/90-apple.conf` (`SATA_LINKPWR_ON_BAT=max_performance`, AHCI runtime PM off, Wi-Fi
+power saving off) on Apple hardware.
 
 `libata.force=noncq,1.5Gbps` is **not** needed - with the two options above the SSD runs at 6 Gb/s with NCQ.
 
