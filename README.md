@@ -62,25 +62,33 @@ Keep a second copy of `organizado/` + `convertidos/` before deleting the raw bac
 
 ## What the scripts set up
 - **System:** English default + a second language (`LANG2`, default `es_CO`), switchable in Settings > Languages;
-  keyboard layouts switch with Alt+Shift and a flag in the top bar. Chrome as default browser, LibreOffice saving
+  keyboard layouts switch with Alt+Shift (ES/US in the top bar). Chrome as default browser, LibreOffice saving
   .docx/.xlsx/.pptx by default, MS core fonts + Carlito/Caladea, Inter (SF Pro stand-in), Epson/Canon drivers,
   automatic updates, password login (autologin off so the keyring unlocks itself).
 - **macOS look:** WhiteSur theme, `WhiteSur-light` icons (plain `WhiteSur` icons are white and vanish in a light
-  menu), cursor, Inter font, top menu bar, window buttons on the left, Plank dock (apps | Downloads, Trash),
-  rotating macOS-style wallpapers + login screen, volume/brightness pop-ups, F3 = open windows, F4 = app menu.
-  Apple logo on the menu button; menu bar right side ordered like macOS (ES/US text, Wi-Fi, volume, battery %,
-  "Sat 25 Oct 3:42 PM" at menu size); centred window titles, shadows, double-click to zoom; Finder-like Thunar;
-  only files on the desktop; rounded top-right notifications.
-- **Spotlight:** ⌘Space opens a centred search bar. It's rofi, not Ulauncher: it starts on demand and exits, so it
-  uses no memory while closed (Ulauncher stays resident, ~100 MB+, too much for 4 GB).
-- **Keys:** Toshy gives ⌘C/⌘V/⌘Q/⌘W/⌘Tab; ⌘⇧3 / ⌘⇧4 save screenshots to the Desktop.
+  menu), cursor, Inter font, window buttons on the left, centred titles, shadows, double-click to zoom, Plank dock
+  (Finder, Launchpad, apps | Downloads, Trash), rotating macOS-style wallpapers, volume/brightness pop-ups,
+  rounded top-right notifications, only files on the desktop, Thunar renamed Finder with Finder-like settings.
+- **Menu bar:** Apple menu (Xfce's Applications Menu on a custom `.menu` file: About This Computer, System
+  Settings, App Store, Force Quit, Sleep, Restart, Shut Down, Lock Screen, Log Out, with separators), then the
+  global menu (`xfce4-appmenu-plugin`: active app's name in bold + its File/Edit/View menus, out of the window;
+  works for Chrome, LibreOffice and GTK apps). Right side as on macOS: ES/US, tray icons, Wi-Fi, volume, battery %,
+  "dom 25 oct 3:42 PM", Search, Gemini. Regular-weight text (WhiteSur makes it bold). Mint's Firefox/Terminal/Files
+  launchers, show-desktop, window buttons and Languages button are removed.
+- **Spotlight (⌘Space) and Launchpad (F4, dock):** rofi, not Ulauncher: it starts on demand and exits, so it uses no
+  memory while closed (Ulauncher stays resident, ~100 MB+, too much for 4 GB). Spotlight: Sonoma-style bar, results
+  appear once you type, apps then her files. Launchpad: full-screen grid on the blurred wallpaper; one click opens.
+- **Keys:** Toshy gives ⌘C/⌘V/⌘Q/⌘W/⌘Tab; ⌘⇧3 / ⌘⇧4 save screenshots to the Desktop. Tapping ⌘ alone does nothing.
 - **Boot and login:** black screen with a white Apple logo and progress bar (Plymouth script theme), GRUB menu hidden
   (Shift/Esc shows it); slick-greeter with a blurred wallpaper, WhiteSur theme and a round macOS account picture
   (made on the helper Mac from `/Library/User Pictures`, never committed).
 - **Trackpad:** natural scrolling, tap to click, two-finger click = right click.
-- **Battery:** dims on battery, lid = sleep, sleeps at 5 %, "Low Battery" warnings at 20 % and 10 %, TLP.
+- **Battery:** dims on battery, lid = sleep, sleeps at 5 %, "Low Battery" warnings at 20 % and 10 % (UPower's
+  figure, as in the menu bar; the kernel's `capacity` reads lower on this Mac), TLP.
+- **Chrome language:** at each login Chrome's website languages are set from the system language (es-CO first when
+  the system is Spanish) and the Translate pop-up is off for her two languages. Chrome must be closed for this.
 - **Gemini:** Google's assistant as its own app window (Chrome `--app`), with a button at the far right of the menu
-  bar where Siri was on macOS 10.12, next to a Search (Spotlight) button; type or use the microphone. There's no
+  bar where Siri was on macOS 10.12 (sparkle on a white circle so it shows on any wallpaper). There's no
   Gemini desktop app for Linux. Chrome's built-in "Gemini in Chrome" and its dictation into web text boxes
   ("Talk to type", Chrome 156) are rolling out by country; Linux availability is unclear, so check Chrome itself.
   The Apple logo and Gemini icon are downloaded at run time (WhiteSur source, gstatic), not stored here.
@@ -107,3 +115,9 @@ power saving off) on Apple hardware.
 - `pkill -f "<pattern>"` inside `ssh host '...<pattern>...'` kills its own shell. Kill by PID or exact name.
 - WhiteSur's installer needs `TERM` set (it calls `setterm`) and writes the Whisker menu opacity to a file
   Xfce 4.18+ ignores; set `menu-opacity` < 100 through xfconf or the menu gets black corners.
+- Don't restart the panel (`xfce4-panel -r`) more than needed: it can take nm-applet, blueman and the update icon
+  down with it. Relaunch them from their `/etc/xdg/autostart` entries, or log out and in.
+- Files the panel watches (custom menus) must be replaced atomically, or it shows "Could not load the applications
+  menu" while the file is half written.
+- Test changes on the real machine with screenshots: `import -window root` + `convert -crop`, crop on the target so
+  only the part being checked leaves the machine.

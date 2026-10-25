@@ -14,7 +14,8 @@ APPLE=$(grep -qi apple /sys/class/dmi/id/sys_vendor 2>/dev/null && echo 1 || ech
 LOGO="$UH/.cache/whitesur-src/WhiteSur-gtk-theme/src/assets/gnome-shell/activities/activities-apple.svg"
 
 log "Tools: Spotlight search (rofi), screenshots, notifications, image tools, battery saver (TLP)"
-apt-get install -y rofi xfce4-screenshooter libnotify-bin imagemagick librsvg2-bin plymouth-themes tlp
+apt-get install -y rofi xfce4-screenshooter libnotify-bin imagemagick librsvg2-bin plymouth-themes tlp \
+  zenity xfce4-appmenu-plugin appmenu-gtk3-module appmenu-gtk2-module appmenu-registrar
 
 if [ "$APPLE" = 1 ]; then
   log "Battery saver: keep TLP away from the SATA link and Wi-Fi power saving (they freeze Apple SSDs / drop Wi-Fi)"

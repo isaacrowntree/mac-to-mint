@@ -46,21 +46,131 @@ X xfwm4 /general/title_alignment string center
 X xfwm4 /general/use_compositing bool true      # also needed for rounded menus, Spotlight and notifications
 X xfwm4 /general/show_frame_shadow bool true
 X xfwm4 /general/show_popup_shadow bool true
+X xfwm4 /general/show_dock_shadow bool false   # else a grey line runs across the screen at the top of Plank's (zoom) area
 X xfwm4 /general/double_click_action string maximize
 
-log "Apple menu: the app menu button shows an Apple logo"
-# Taken from the WhiteSur source at run time (not stored in this repo); dark grey to match a light menu bar
-cp "$T/WhiteSur-gtk-theme/src/assets/gnome-shell/activities-black/activities-apple.svg" "$I/apple-menu.svg" \
+log "Apple menu (top left) like macOS: About, System Settings, App Store, Force Quit, Sleep, Restart, Shut Down, Lock, Log Out"
+# Logo taken from the WhiteSur source at run time (not stored in this repo); dark grey to match a light menu bar.
+# Apps are opened from the dock, Launchpad (F4) and Spotlight (⌘Space), as on a Mac - not from this menu.
+# The source draws the logo in the middle of a 48 px canvas; crop it (logo spans x 9-39, y 6-42) so at the bar's
+# 18 px icon size it is ~17 px tall, the same share of the bar as on macOS
+sed 's/width="48" height="48"/width="38" height="38" viewBox="5 5 38 38"/' \
+  "$T/WhiteSur-gtk-theme/src/assets/gnome-shell/activities-black/activities-apple.svg" > "$I/apple-menu.svg" \
   || echo "   (Apple logo not found in the WhiteSur source)"
 gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
-for p in $(plugins whiskermenu); do
-  X xfce4-panel "$p/button-icon" string apple-menu
-  X xfce4-panel "$p/show-button-icon" bool true
-  X xfce4-panel "$p/show-button-title" bool false
-  # Whisker only uses a translucent (rounded, no black corners) window below 100% opacity; WhiteSur's installer
-  # writes this to the old whiskermenu .rc file, which Xfce 4.18+ ignores
-  X xfce4-panel "$p/menu-opacity" int 95
-done
+cat > "$B/acerca-de" <<'EOF'
+#!/usr/bin/env bash
+# "About This Mac"-style window
+model=$(cat /sys/class/dmi/id/product_name 2>/dev/null)
+cpu=$(lscpu | sed -n 's/^Model name: *//p; s/^Nombre del modelo: *//p' | head -1)
+mem=$(awk '/MemTotal/{printf "%.0f GB", $2/1048576}' /proc/meminfo)
+os=$(lsb_release -ds 2>/dev/null)
+disk=$(df -h --output=avail / | tail -1 | tr -d ' ')
+case "${LANG:-}" in
+  es*) t="Acerca de este equipo"; txt="<b>$model</b>\n\nSistema:  $os\nProcesador:  $cpu\nMemoria:  $mem\nDisco libre:  $disk" ;;
+  *)   t="About This Computer";   txt="<b>$model</b>\n\nSystem:  $os\nProcessor:  $cpu\nMemory:  $mem\nDisk free:  $disk" ;;
+esac
+zenity --info --title="$t" --text="$txt" --width=420
+EOF
+cat > "$B/apple-action" <<'EOF'
+#!/usr/bin/env bash
+# Apple menu actions that ask first, like macOS's "Are you sure you want to restart?"
+es=0; case "${LANG:-}" in es*) es=1;; esac
+case "$1" in
+  restart)  q=("Are you sure you want to restart your computer now?" "¿Seguro que desea reiniciar el equipo ahora?"); a=--reboot ;;
+  shutdown) q=("Are you sure you want to shut down your computer now?" "¿Seguro que desea apagar el equipo ahora?"); a=--halt ;;
+  logout)   q=("Are you sure you want to quit all applications and log out now?" "¿Seguro que desea cerrar todas las aplicaciones y la sesión ahora?"); a=--logout ;;
+  *) exit 1 ;;
+esac
+zenity --question --text="${q[$es]}" --ok-label="$([ $es = 1 ] && echo Aceptar || echo OK)" \
+  --cancel-label="$([ $es = 1 ] && echo Cancelar || echo Cancel)" && exec xfce4-session-logout "$a"
+EOF
+chmod +x "$B/acerca-de" "$B/apple-action"
+# The menu is Xfce's Applications Menu button pointed at a custom menu file: a real menu, text only, with
+# separators like macOS. Its entries live outside ~/.local/share/applications so Spotlight/Launchpad don't list them.
+rm -rf "$A/apple-menu"   # earlier version of this menu
+AM="$HOME/.local/share/apple-menu"; mkdir -p "$AM" "$HOME/.config/menus"
+# The panel re-reads these files as soon as they change, so write a copy and swap it in (only if different):
+# a half-written menu file pops up "Could not load the applications menu"
+put() { cat > "$1.tmp"; if cmp -s "$1.tmp" "$1"; then rm -f "$1.tmp"; else mv "$1.tmp" "$1"; fi; }
+am() {  # file, English name, Spanish name, command
+  printf '[Desktop Entry]\nType=Application\nName=%s\nName[es]=%s\nExec=%s\nCategories=X-AppleMenu;\n' "$2" "$3" "$4" \
+    | put "$AM/$1.desktop"
+}
+am about     "About This Computer" "Acerca de este equipo"      "$B/acerca-de"
+am settings  "System Settings…"    "Configuración del sistema…" xfce4-settings-manager
+am store     "App Store…"          "Tienda de aplicaciones…"    mintinstall
+am forcequit "Force Quit…"         "Forzar salida…"             xfce4-taskmanager
+am sleep     "Sleep"               "Reposo"                     "xfce4-session-logout --suspend"
+am restart   "Restart…"            "Reiniciar…"                 "$B/apple-action restart"
+am shutdown  "Shut Down…"          "Apagar…"                    "$B/apple-action shutdown"
+am lock      "Lock Screen"         "Bloquear pantalla"          xflock4
+am logout    "Log Out…"            "Cerrar sesión…"             "$B/apple-action logout"
+APPLE_MENU="$HOME/.config/menus/apple-menu.menu"
+put "$APPLE_MENU" <<EOF
+<!DOCTYPE Menu PUBLIC "-//freedesktop//DTD Menu 1.0//EN" "http://www.freedesktop.org/standards/menu-spec/1.0/menu.dtd">
+<Menu>
+  <Name>Apple</Name>
+  <AppDir>$AM</AppDir>
+  <Include><Category>X-AppleMenu</Category></Include>
+  <Layout>
+    <Filename>about.desktop</Filename>
+    <Separator/>
+    <Filename>settings.desktop</Filename>
+    <Filename>store.desktop</Filename>
+    <Separator/>
+    <Filename>forcequit.desktop</Filename>
+    <Separator/>
+    <Filename>sleep.desktop</Filename>
+    <Filename>restart.desktop</Filename>
+    <Filename>shutdown.desktop</Filename>
+    <Separator/>
+    <Filename>lock.desktop</Filename>
+    <Filename>logout.desktop</Filename>
+  </Layout>
+</Menu>
+EOF
+
+log "Launchpad: F4 or the dock icon shows all apps full screen (rofi: no memory used while closed)"
+mkdir -p "$HOME/.local/share/rofi/themes"
+cat > "$HOME/.local/share/rofi/themes/launchpad.rasi" <<'EOF'
+* { font: "Inter 12"; background-color: transparent; text-color: #ffffff; }
+/* Whole screen (the dock hides itself behind windows, so leaving its strip open showed them); Esc or F4 closes.
+   Background: the blurred wallpaper (the launchpad script makes it at screen size), darkened, as on macOS */
+window { fullscreen: true; background-color: #2c2c2e; }
+mainbox { children: [ inputbar, listview ]; spacing: 36px; padding: 6% 9%; background-color: #00000040; }
+inputbar { children: [ entry ]; margin: 0 38%; padding: 6px 12px; border-radius: 8px; background-color: #ffffff26; }
+entry { placeholder-color: #ffffffaa; horizontal-align: 0.5; }
+listview { columns: 7; lines: 4; flow: horizontal; fixed-columns: true; spacing: 20px; scrollbar: false; }
+element { orientation: vertical; padding: 10px 6px; spacing: 8px; border-radius: 14px; }
+element selected.normal { background-color: #ffffff33; }
+element-icon { size: 64px; horizontal-align: 0.5; }
+element-text { horizontal-align: 0.5; text-color: inherit; }
+EOF
+cat > "$B/launchpad" <<'EOF'
+#!/usr/bin/env bash
+# Launchpad-style grid of all apps; F4 again or Esc closes it
+pkill -x rofi && exit 0
+case "${LANG:-}" in es*) ph="Buscar";; *) ph="Search";; esac
+# Blurred wallpaper at exactly the screen size, made once (scaling a bigger image left a strip uncovered)
+BG="$HOME/.cache/launchpad-bg.jpg"
+if [ ! -s "$BG" ] && command -v convert >/dev/null; then
+  size=$(xrandr 2>/dev/null | awk '/\*/{print $1; exit}'); size=${size:-1366x768}
+  src=/usr/share/backgrounds/macos/login-blur.jpg; [ -f "$src" ] || src="$HOME/.local/share/backgrounds/macos/Sonoma-light.jpg"
+  convert "$src" -resize "$size^" -gravity center -extent "$size" -blur 0x20 "$BG" 2>/dev/null
+fi
+# (rofi refuses a background-image in -theme-str next to another rule, so it goes in a small theme of its own)
+T="$HOME/.cache/launchpad.rasi"
+{ echo "@import \"$HOME/.local/share/rofi/themes/launchpad.rasi\""; [ -s "$BG" ] && echo "window { background-image: url(\"$BG\", width); }"; } > "$T"
+# Apps only, like Launchpad: settings panels and system tools (Terminal...) stay in System Settings / Spotlight
+# One click opens an app, as on a Mac (rofi's default is click to select, double-click to open)
+exec rofi -show drun -show-icons -drun-use-desktop-cache -drun-display-format '{name}' -theme "$T" \
+  -me-select-entry '' -me-accept-entry MousePrimary \
+  -drun-categories Office,Network,Graphics,AudioVideo,Audio,Video,Game,Education,Utility \
+  -theme-str "entry { placeholder: \"$ph\"; }"
+EOF
+chmod +x "$B/launchpad"
+printf '[Desktop Entry]\nType=Application\nName=Launchpad\nExec=%s\nIcon=view-app-grid\nNoDisplay=true\nStartupNotify=false\n' "$B/launchpad" > "$A/launchpad.desktop"
 
 log "macOS-style wallpapers (WhiteSur recreations), random, changing every hour"
 [ -d "$T/WhiteSur-wallpapers" ] || git clone -q --depth 1 https://github.com/vinceliuice/WhiteSur-wallpapers.git "$T/WhiteSur-wallpapers"
@@ -88,9 +198,16 @@ X xfce4-panel /panels/panel-1/size uint 30     # already taller than macOS's bar
 X xfce4-panel /panels/panel-1/icon-size uint 18
 
 log "Gemini (Google's assistant) as its own app - type, or tap the microphone to talk"
+# Google's coloured Gemini sparkle; the vector one stays sharp at the menu bar's small size
 G="$HOME/.local/share/icons/hicolor/512x512/apps"; mkdir -p "$G"
-curl -fsSL -o "$G/gemini.png" https://www.gstatic.com/lamda/images/gemini_sparkle_4g_512_lt_f94943af3be039176192d.png \
+curl -fsSL -o "$I/google-gemini.svg" https://www.gstatic.com/lamda/images/gemini_sparkle_v002_d4735304ff6292a690345.svg \
+  || curl -fsSL -o "$G/google-gemini.png" https://www.gstatic.com/lamda/images/gemini_sparkle_4g_512_lt_f94943af3be039176192d.png \
   || echo "   (icon download failed; the menu entry uses a generic icon)"
+# Menu bar version: the sparkle on a small white circle, so it shows on any wallpaper (blue on blue vanished)
+if [ -s "$I/google-gemini.svg" ]; then
+  printf '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="14" fill="#fff"/><g transform="translate(5.5 5.5) scale(0.607)">%s</g></svg>\n' \
+    "$(sed -e '1s/<svg[^>]*>//' -e 's#</svg>##' "$I/google-gemini.svg" | tr -d '\n')" > "$I/google-gemini-panel.svg"
+fi
 gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
 cat > "$A/gemini.desktop" <<'EOF'
 [Desktop Entry]
@@ -99,7 +216,7 @@ Name=Gemini
 Comment=Ask Google's AI assistant
 Comment[es]=Pregúntele al asistente de Google
 Exec=google-chrome --app=https://gemini.google.com/app
-Icon=gemini
+Icon=google-gemini
 Categories=Utility;
 StartupWMClass=gemini.google.com__app
 EOF
@@ -111,6 +228,7 @@ Name[es]=Buscar
 Exec=$B/spotlight
 Icon=system-search-symbolic
 NoDisplay=true
+StartupNotify=false
 EOF
 
 log "Menu bar right side like macOS Sierra: ES/US, Wi-Fi, volume, battery %, 'Sat 25 Oct 3:42 PM', Search, Gemini (where Siri was)"
@@ -119,9 +237,61 @@ for f in "spotlight:$B/spotlight" "gemini:gemini.google.com"; do
   grep -qs "^Exec=.*${f#*:}" "$HOME"/.config/xfce4/panel/launcher-*/*.desktop \
     || { xfce4-panel --add=launcher "$A/${f%%:*}.desktop"; sleep 1; }
 done
+# Left side: Apple menu, then the global menu (below)
+apple_menus() { for p in $(plugins applicationsmenu); do
+  [ "$(xfconf-query -c xfce4-panel -p "$p/custom-menu-file" 2>/dev/null)" = "$APPLE_MENU" ] && echo "$p"; done; }
+if [ -z "$(apple_menus)" ]; then
+  before=$(plugins applicationsmenu); xfce4-panel --add=applicationsmenu; sleep 2
+  for p in $(plugins applicationsmenu); do
+    echo "$before" | grep -qx "$p" || X xfce4-panel "$p/custom-menu-file" string "$APPLE_MENU"
+  done
+fi
+for p in $(apple_menus); do
+  X xfce4-panel "$p/custom-menu" bool true
+  X xfce4-panel "$p/button-icon" string apple-menu
+  X xfce4-panel "$p/show-button-title" bool false
+  X xfce4-panel "$p/show-menu-icons" bool false
+  X xfce4-panel "$p/show-tooltips" bool false
+  X xfce4-panel "$p/show-generic-names" bool false
+done
+# Panel text: WhiteSur makes it bold; macOS's menu bar is regular weight (the app name next to the logo stays bold)
+mkdir -p "$HOME/.config/gtk-3.0"; touch "$HOME/.config/gtk-3.0/gtk.css"
+sed -i '/mac-to-mint panel/,/mac-to-mint end/d' "$HOME/.config/gtk-3.0/gtk.css"
+cat >> "$HOME/.config/gtk-3.0/gtk.css" <<'EOF'
+/* mac-to-mint panel */
+.xfce4-panel.background, .xfce4-panel.background button, .xfce4-panel.background button.flat { font-weight: 500; }
+/* room around the Apple logo, as on macOS */
+#applicationmenu-button { padding: 0 12px 0 16px; }
+/* mac-to-mint end */
+EOF
+# The Gemini button keeps the icon of the .desktop copy the panel made when it was added; refresh it
+[ -s "$I/google-gemini-panel.svg" ] && \
+  sed -i -E 's/^Icon=(google-)?gemini$/Icon=google-gemini-panel/' "$HOME"/.config/xfce4/panel/launcher-*/*.desktop 2>/dev/null
+sleep 2   # the panel ignores --add while it is still taking in the launchers above
+# Global menu (from script 4): the active app's name in bold and its menus (File, Edit, View...) in the top bar,
+# taken out of the app's window, as on a Mac. Works for Chrome, LibreOffice, Files and other GTK apps.
+if [ -f /usr/share/xfce4/panel/plugins/appmenu.desktop ]; then
+  X xsettings /Gtk/ShellShowsMenubar bool true
+  X xsettings /Gtk/ShellShowsAppmenu bool true
+  X xsettings /Gtk/Modules string appmenu-gtk-module
+  # Its systemd unit targets xfce-session.target, which Xfce 4.18 doesn't start; set GTK_MODULES at login instead
+  grep -qs appmenu-gtk-module "$HOME/.xsessionrc" \
+    || echo 'export GTK_MODULES="${GTK_MODULES:+$GTK_MODULES:}appmenu-gtk-module"' >> "$HOME/.xsessionrc"
+  if [ -z "$(plugins appmenu)" ]; then
+    xfce4-panel -r; sleep 5   # a running panel doesn't see plugins installed after it started
+    xfce4-panel --add=appmenu; sleep 2
+  fi
+  for p in $(plugins appmenu); do
+    X xfce4-panel "$p/bold-application-name" bool true   # "Google Chrome" in bold, then Archivo, Edición...
+    X xfce4-panel "$p/compact-mode" bool false
+  done
+fi
 # Keyboard indicator: add if missing, show text instead of a flag. Languages button: removed (Settings > Languages).
 [ -n "$(plugins xkb)" ] || xfce4-panel --add=xkb
-for p in $(plugins xkb); do X xfce4-panel "$p/display-type" uint 1; X xfce4-panel "$p/display-name" uint 0; done
+for p in $(plugins xkb); do
+  X xfce4-panel "$p/display-type" uint 1; X xfce4-panel "$p/display-name" uint 0
+  X xfce4-panel "$p/display-scale" uint 55     # text fills the bar height at 100 %
+done
 for p in $(plugins clock); do
   X xfce4-panel "$p/mode" uint 2                                # digital
   X xfce4-panel "$p/digital-layout" uint 3                      # one line (the time format holds the date)
@@ -132,25 +302,43 @@ done
 X xfce4-power-manager /xfce4-power-manager/show-panel-label int 1   # battery percentage next to the icon
 for p in $(plugins pulseaudio); do X xfce4-panel "$p/show-notifications" bool true; done
 ids=$(xfconf-query -c xfce4-panel -p /panels/panel-1/plugin-ids 2>/dev/null | grep -E '^[0-9]+$')
-keep=(); declare -A bytype=()
+keep=(); declare -A bytype=() first=()
 for id in $ids; do
   t=$(xfconf-query -c xfce4-panel -p "/plugins/plugin-$id" 2>/dev/null)
-  if [ "$t" = launcher ] && grep -qs mintlocale "$HOME/.config/xfce4/panel/launcher-$id"/*.desktop; then
+  # A Mac menu bar has no app shortcuts (they're in the dock): drop Mint's Languages, Firefox, Terminal, Files
+  # launchers and the show-desktop button. Also the Windows-style window buttons (the dock shows open apps), the
+  # Whisker app menu (replaced by the Apple menu + Launchpad) and the small fixed gaps between them.
+  if [ "$t" = showdesktop ] || [ "$t" = tasklist ] || [ "$t" = whiskermenu ] || [ "$t" = windowck-plugin ] \
+     || { [ "$t" = launcher ] && grep -qs "^Exec=$B/acerca-de" "$HOME/.config/xfce4/panel/launcher-$id"/*.desktop; } \
+     || { [ "$t" = separator ] && [ "$(xfconf-query -c xfce4-panel -p "/plugins/plugin-$id/expand" 2>/dev/null)" != true ]; } \
+     || { [ "$t" = launcher ] && grep -qsE "^Exec=(mintlocale|firefox|xfce4-terminal|thunar)( |$)" \
+          "$HOME/.config/xfce4/panel/launcher-$id"/*.desktop; }; then
     xfconf-query -c xfce4-panel -p "/plugins/plugin-$id" -r -R; rm -rf "$HOME/.config/xfce4/panel/launcher-$id"
     continue
   fi
   if [ "$t" = launcher ] && grep -qs "^Exec=$B/spotlight" "$HOME/.config/xfce4/panel/launcher-$id"/*.desktop; then t=search; fi
   if [ "$t" = launcher ] && grep -qs "gemini.google.com" "$HOME/.config/xfce4/panel/launcher-$id"/*.desktop; then t=gemini; fi
+  if [ "$t" = applicationsmenu ] && [ "$(xfconf-query -c xfce4-panel -p "/plugins/plugin-$id/custom-menu-file" 2>/dev/null)" = "$APPLE_MENU" ]; then
+    t=applemenu
+  fi
   case "$t" in
-    xkb|systray|pulseaudio|power-manager-plugin|notification-plugin|clock|search|gemini) bytype[$t]+="$id ";;
+    applemenu|appmenu) first[$t]="$id ";;
+    xkb|systray|xapp-status-plugin|pulseaudio|power-manager-plugin|notification-plugin|clock|search|gemini) bytype[$t]+="$id ";;
     *) keep+=("$id");;
   esac
 done
-for t in xkb systray pulseaudio power-manager-plugin notification-plugin clock search gemini; do keep+=(${bytype[$t]:-}); done
+keep=(${first[applemenu]:-} ${first[appmenu]:-} "${keep[@]}")
+for t in xkb systray xapp-status-plugin pulseaudio power-manager-plugin notification-plugin clock search gemini; do keep+=(${bytype[$t]:-}); done
 if [ ${#keep[@]} -gt 0 ]; then
   args=(); for id in "${keep[@]}"; do args+=(-t int -s "$id"); done
   xfconf-query -c xfce4-panel -p /panels/panel-1/plugin-ids --force-array "${args[@]}" || echo "   (could not reorder the panel)"
 fi
+# Launcher folders left behind by removed launchers (their ids get reused by other plugins)
+live=" $(xfconf-query -c xfce4-panel -p /panels/panel-1/plugin-ids 2>/dev/null | grep -E '^[0-9]+$' | tr '\n' ' ') "
+for d in "$HOME"/.config/xfce4/panel/launcher-*; do
+  [[ "$live" == *" ${d##*-} "* ]] && [ "$(xfconf-query -c xfce4-panel -p "/plugins/plugin-${d##*-}" 2>/dev/null)" = launcher ] \
+    || rm -rf "$d"
+done
 
 log "Dock (Plank) with the everyday apps"
 PT="$(find "$T/WhiteSur-gtk-theme" -type d -path '*plank*' -name '*Light*' | head -1)"
@@ -158,7 +346,7 @@ if [ -n "$PT" ]; then mkdir -p "$HOME/.local/share/plank/themes/WhiteSur-Light" 
 
 L="$HOME/.config/plank/dock1/launchers"; mkdir -p "$L"
 items=()
-for app in thunar google-chrome libreoffice-writer libreoffice-calc libreoffice-impress xreader; do
+for app in thunar launchpad google-chrome libreoffice-writer libreoffice-calc libreoffice-impress xreader; do
   f=$(ls /usr/share/applications/$app.desktop "$A/$app.desktop" 2>/dev/null | head -1)
   [ -n "$f" ] || { echo "   (no launcher for $app)"; continue; }
   printf '[PlankDockItemPreferences]\nLauncher=file://%s\n' "$f" > "$L/$app.dockitem"
@@ -192,6 +380,9 @@ X thunar /misc-folders-first bool true
 X thunar /misc-thumbnail-mode string THUNAR_THUMBNAIL_MODE_ALWAYS
 X thunar /last-location-bar string ThunarLocationButtons
 X thunar /last-side-pane string ThunarShortcutsPane
+# Called Finder, as on her Mac (the menu bar shows "Finder" instead of "Gestor de archivos Thunar")
+sed -E '/^(Name|GenericName)(\[[^]]*\])?=/d; s/^\[Desktop Entry\]$/&\nName=Finder/' /usr/share/applications/thunar.desktop \
+  > "$A/thunar.desktop"
 BM="$HOME/.config/gtk-3.0/bookmarks"; mkdir -p "${BM%/*}"; touch "$BM"
 for d in DOCUMENTS DOWNLOAD PICTURES MUSIC VIDEOS; do
   p=$(xdg-user-dir "$d"); [ -d "$p" ] && [ "$p" != "$HOME" ] || continue
@@ -199,31 +390,64 @@ for d in DOCUMENTS DOWNLOAD PICTURES MUSIC VIDEOS; do
   grep -q "^$u\( \|$\)" "$BM" || echo "$u" >> "$BM"
 done
 
-log "Spotlight: ⌘Space (Super+Space) opens a centred search bar (rofi: starts on demand, uses no memory when closed)"
+log "Spotlight: ⌘Space (Super+Space) opens a centred search bar for apps and files (rofi: no memory used while closed)"
 mkdir -p "$HOME/.local/share/rofi/themes"
+# macOS Sonoma: 680 px bar a quarter of the way down, magnifier, large light text, results only once you type
 cat > "$HOME/.local/share/rofi/themes/spotlight.rasi" <<'EOF'
-* { font: "Inter 15"; bg: #f6f6f6f2; fg: #1d1d1f; dim: #86868b; sel: #0a64d6; selfg: #ffffff;
+* { font: "Inter 13"; bg: #ececece8; fg: #1d1d1f; dim: #8e8e93; sel: #0a64d6; selfg: #ffffff;
     background-color: transparent; text-color: @fg; }
-window { location: north; anchor: north; y-offset: 22%; width: 620px; padding: 10px;
-         border: 1px; border-color: #0000001f; border-radius: 14px; background-color: @bg; }
-mainbox { children: [ inputbar, listview ]; spacing: 6px; }
-inputbar { children: [ entry ]; padding: 8px 10px; }
-entry { placeholder-color: @dim; font: "Inter 19"; }
-listview { lines: 7; fixed-height: false; scrollbar: false; spacing: 2px; }
-element { padding: 6px 10px; spacing: 12px; border-radius: 8px; }
+window { location: north; anchor: north; y-offset: 24%; width: 680px; padding: 0;
+         border: 1px; border-color: #00000026; border-radius: 12px; background-color: @bg; }
+mainbox { children: [ inputbar, listview ]; spacing: 0; }
+inputbar { children: [ icon-search, entry ]; spacing: 10px; padding: 12px 16px; }
+icon-search { expand: false; filename: "system-search-symbolic"; size: 22px; vertical-align: 0.5; }
+entry { font: "Inter Light 21"; placeholder-color: @dim; vertical-align: 0.5; }
+listview { require-input: true; lines: 8; fixed-height: false; scrollbar: false; spacing: 0;
+           padding: 6px 8px 8px; border: 1px 0 0 0; border-color: #0000001a; }
+element { padding: 5px 10px; spacing: 10px; border-radius: 6px; }
 element selected.normal { background-color: @sel; text-color: @selfg; }
-element-icon { size: 28px; }
-element-text { text-color: inherit; vertical-align: 0.5; }
+element-icon { size: 22px; }
+element-text { text-color: inherit; vertical-align: 0.5; highlight: bold; }   /* bold match, no underline */
+EOF
+cat > "$B/spotlight-files" <<'EOF'
+#!/usr/bin/env bash
+# rofi script mode: lists her documents, photos, music and videos; opens the chosen one.
+# Listing takes ~1 s on this Mac, so Spotlight shows the list from the last time and refreshes it in the background.
+if [ -n "${ROFI_INFO:-}" ]; then setsid xdg-open "$ROFI_INFO" >/dev/null 2>&1 & exit 0; fi
+C="$HOME/.cache/spotlight-files"
+if [ -z "${SPOTLIGHT_REFRESH:-}" ]; then
+  [ -s "$C" ] || SPOTLIGHT_REFRESH=1 "$0" > "$C"
+  cat "$C"
+  (SPOTLIGHT_REFRESH=1 "$0" > "$C.new" && mv "$C.new" "$C") >/dev/null 2>&1 &
+  exit 0
+fi
+for d in DESKTOP DOCUMENTS DOWNLOAD PICTURES MUSIC VIDEOS; do xdg-user-dir "$d"; done | sort -u | grep -vx "$HOME" |
+while read -r dir; do [ -d "$dir" ] && find "$dir" -type f -not -path '*/.*' 2>/dev/null; done |
+while read -r f; do
+  case "${f,,}" in
+    *.doc|*.docx|*.odt|*.rtf|*.pages) i=x-office-document ;;
+    *.xls|*.xlsx|*.ods|*.csv|*.numbers) i=x-office-spreadsheet ;;
+    *.ppt|*.pptx|*.pps|*.ppsx|*.odp|*.key) i=x-office-presentation ;;
+    *.pdf) i=application-pdf ;;
+    *.jpg|*.jpeg|*.png|*.gif|*.heic|*.tif|*.tiff|*.bmp|*.webp) i=image-x-generic ;;
+    *.mp3|*.m4a|*.aac|*.wav|*.flac|*.ogg|*.aif|*.aiff) i=audio-x-generic ;;
+    *.mp4|*.mov|*.m4v|*.avi|*.mkv|*.3gp|*.wmv) i=video-x-generic ;;
+    *) i=text-x-generic ;;
+  esac
+  printf '%s\0icon\x1f%s\x1finfo\x1f%s\n' "${f##*/}" "$i" "$f"
+done
 EOF
 cat > "$B/spotlight" <<'EOF'
 #!/usr/bin/env bash
-# Spotlight-style app search; pressing the shortcut again closes it
+# Spotlight-style search (apps first, then files); pressing the shortcut again closes it
 pkill -x rofi && exit 0
-case "${LANG:-}" in es*) ph="Buscar";; *) ph="Search";; esac
-exec rofi -show drun -show-icons -drun-display-format '{name}' -theme spotlight \
-  -theme-str "entry { placeholder: \"$ph\"; }"
+case "${LANG:-}" in es*) ph="Búsqueda de Spotlight";; *) ph="Spotlight Search";; esac
+# Match app names only (not their commands: "libre" found the Menu Editor, menulibre), best matches first
+exec rofi -show combi -combi-modes "drun,files:$HOME/.local/bin/spotlight-files" -combi-hide-mode-prefix \
+  -drun-match-fields name,generic,keywords -sort -sorting-method fzf -me-select-entry '' -me-accept-entry MousePrimary \
+  -show-icons -drun-display-format '{name}' -theme spotlight -theme-str "entry { placeholder: \"$ph\"; }"
 EOF
-chmod +x "$B/spotlight"
+chmod +x "$B/spotlight" "$B/spotlight-files"
 X xfce4-keyboard-shortcuts "/commands/custom/<Super>space" string "$B/spotlight"   # Toshy turns ⌘Space into this
 
 log "Screenshots like macOS: ⌘⇧3 whole screen, ⌘⇧4 an area, saved to the Desktop"
@@ -239,9 +463,11 @@ X keyboard-layout /Default/XkbLayout string "es,us"
 X keyboard-layout /Default/XkbVariant string ","
 X keyboard-layout /Default/XkbOptions/Group string "grp:alt_shift_toggle"
 
-log "Mac top-row keys: F3 (Mission Control) = list of open windows, F4 (Launchpad) = app menu"
+log "Mac top-row keys: F3 (Mission Control) = list of open windows, F4 = Launchpad"
 X xfce4-keyboard-shortcuts /commands/custom/XF86LaunchA string "xfdesktop --windowlist"
-X xfce4-keyboard-shortcuts /commands/custom/XF86LaunchB string xfce4-popup-whiskermenu
+X xfce4-keyboard-shortcuts /commands/custom/XF86LaunchB string "$B/launchpad"
+# Mint opens its menu on a tap of the ⌘ (Super) key; a Mac does nothing, and with ⌘ shortcuts it would pop up
+xfconf-query -c xfce4-keyboard-shortcuts -p /commands/custom/Super_L -r 2>/dev/null || true
 
 log "On-screen pop-ups for the volume and brightness keys, like macOS"
 X xfce4-power-manager /xfce4-power-manager/handle-brightness-keys bool true
@@ -281,7 +507,10 @@ cat > "$B/aviso-bateria" <<'EOF'
 BAT=$(ls -d /sys/class/power_supply/BAT* 2>/dev/null | head -1); [ -n "$BAT" ] || exit 0
 warned=100
 while sleep 60; do
-  cap=$(<"$BAT/capacity"); st=$(<"$BAT/status")
+  # UPower's figure, the one the menu bar shows (this Mac's kernel "capacity" reads ~10 points lower)
+  cap=$(upower -i "$(upower -e | grep -m1 BAT)" 2>/dev/null | awk '/percentage/{gsub(/[%,].*/, "", $2); print $2}')
+  [ -n "$cap" ] || cap=$(<"$BAT/capacity")
+  st=$(<"$BAT/status")
   [ "$st" = Discharging ] || { warned=100; continue; }
   for lvl in 10 20; do
     [ "$cap" -le $lvl ] && [ $warned -gt $lvl ] || continue
@@ -300,6 +529,41 @@ printf '[Desktop Entry]\nType=Application\nName=Low battery warning\nExec=%s\nNo
   > "$HOME/.config/autostart/aviso-bateria.desktop"
 pgrep -f "$B/aviso-bateria" >/dev/null || (setsid "$B/aviso-bateria" >/dev/null 2>&1 &)
 
+log "Chrome and Gemini follow the system language (Settings > Languages), checked at each login"
+# Chrome keeps the website languages it was given when the profile was made (English here), so Spanish pages and
+# Gemini came up in English with a Translate offer. Before Chrome starts, put the system language first.
+cat > "$B/chrome-idioma" <<'EOF'
+#!/usr/bin/env python3
+"""Set Chrome's website languages from the system language. Only while Chrome is closed (it rewrites the file)."""
+import json, os, subprocess
+if subprocess.run(["pgrep", "-x", "chrome"], capture_output=True).returncode == 0:
+    raise SystemExit(0)
+lang = (os.environ.get("LANGUAGE") or os.environ.get("LANG") or "en_US").split(":")[0].split(".")[0]
+first = lang.replace("_", "-")                      # es-CO
+base = first.split("-")[0]                          # es
+other = "en" if base != "en" else "es"
+want = ",".join(dict.fromkeys([first, base, other]))
+for prof in ("Default",):
+    p = os.path.expanduser(f"~/.config/google-chrome/{prof}/Preferences")
+    if not os.path.exists(p):
+        continue
+    d = json.load(open(p))
+    intl = d.setdefault("intl", {})
+    blocked = sorted({base, other} | set(d.get("translate_blocked_languages", [])))
+    if (intl.get("accept_languages"), intl.get("selected_languages"), d.get("translate_blocked_languages")) \
+            == (want, want, blocked):
+        continue
+    intl["accept_languages"] = intl["selected_languages"] = want
+    # No "Translate this page?" pop-up for her two languages; the Translate icon in the address bar still works
+    d["translate_blocked_languages"] = blocked
+    json.dump(d, open(p + ".tmp", "w"))
+    os.replace(p + ".tmp", p)
+EOF
+chmod +x "$B/chrome-idioma"
+printf '[Desktop Entry]\nType=Application\nName=Chrome language\nExec=%s\nNoDisplay=true\n' "$B/chrome-idioma" \
+  > "$HOME/.config/autostart/chrome-idioma.desktop"
+"$B/chrome-idioma" || true
+
 log "How-to note on the desktop"
 cat > "$DESK/Change language - Cambiar idioma.txt" <<'EOF'
 English -> Español
@@ -313,5 +577,5 @@ Español -> English
 Keyboard / Teclado:  Alt + Shift switches Spanish <-> English keys (ES / US in the top bar).
 EOF
 
-[ -n "${DISPLAY:-}" ] && xfce4-panel -r >/dev/null 2>&1 &
+# No panel restart here: restarting it can take the Wi-Fi, Bluetooth and update icons down with it
 log "Done. Log out and back in to see everything applied."
