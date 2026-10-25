@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# ⌘⇧3 / ⌘⇧4 like macOS: straight to the Desktop as "Screenshot 2026-10-26 at 09.41.12.png", no questions asked.
+#   screenshot        whole screen
+#   screenshot area   drag out an area
+# (xfce4-screenshooter only saves silently when given a full file name; given a folder it opens a Save dialog.)
+D=$(xdg-user-dir DESKTOP 2>/dev/null); D=${D:-$HOME/Desktop}; mkdir -p "$D"
+case "${1:-}" in area) m=-r ;; *) m=-f ;; esac
+exec xfce4-screenshooter "$m" -s "$D/Screenshot $(date '+%Y-%m-%d at %H.%M.%S').png"

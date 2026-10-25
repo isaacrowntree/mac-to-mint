@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Print the on-screen boxes of the named things in a window, from the accessibility tree, as JSON:
     ui-find.py "Mission Control"   ->   [{"role": "push button", "name": "Desktop 1", "box": [x, y, w, h]}, ...]
-Run in the user's session (test/input-test.py does this), so the tests can click buttons wherever they are."""
+Run in the user's session (test/mintosh-test.py does this), so the tests can click buttons wherever they are."""
 import json
 import sys
 

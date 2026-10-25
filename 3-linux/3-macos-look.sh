@@ -412,13 +412,15 @@ EOF
 if command -v touchegg >/dev/null; then pkill -x touchegg; (setsid touchegg >/dev/null 2>&1 < /dev/null &); fi
 
 log "Spotlight: ⌘Space (Super+Space) opens a centred search bar for apps and files (rofi: no memory used while closed)"
-X xfce4-keyboard-shortcuts "/commands/custom/<Super>space" string "$B/spotlight"   # Toshy turns ⌘Space into this
+# Toshy (script 5) turns ⌘Space into Super+Space on Mint and into Ctrl+Esc on other Xfce systems (Xubuntu, ...)
+X xfce4-keyboard-shortcuts "/commands/custom/<Super>space" string "$B/spotlight"
+X xfce4-keyboard-shortcuts "/commands/custom/<Primary>Escape" string "$B/spotlight"
 
 log "Screenshots like macOS: ⌘⇧3 whole screen, ⌘⇧4 an area, saved to the Desktop"
 # <Super> = the ⌘ key itself; <Primary> = ⌘ once Toshy (script 5) turns ⌘ shortcuts into Ctrl ones
 for m in "<Shift><Super>" "<Primary><Shift>"; do
-  X xfce4-keyboard-shortcuts "/commands/custom/${m}3" string "xfce4-screenshooter -f -s $DESK"
-  X xfce4-keyboard-shortcuts "/commands/custom/${m}4" string "xfce4-screenshooter -r -s $DESK"
+  X xfce4-keyboard-shortcuts "/commands/custom/${m}3" string "$B/screenshot"
+  X xfce4-keyboard-shortcuts "/commands/custom/${m}4" string "$B/screenshot area"
 done
 
 log "Keyboard: US English${KBD:+, plus ${KBD%%,*} (switch with Alt+Shift)}"
@@ -436,12 +438,14 @@ fi
 log "Desktops (Spaces): one to start with, as on a Mac; add more from Mission Control's + button"
 X xfwm4 /general/workspace_count int 1
 X xfwm4 /general/wrap_workspaces bool false
-# Ctrl+←/→ switch desktops, as on macOS. Toshy (script 5) sends the physical Ctrl+←/→ as Ctrl+Alt+End/Home (its Xfce
-# mapping). Plain Ctrl+←/→ is left alone: with Toshy that is what ⌥←/→ (jump a word) becomes.
-for k in "<Primary><Alt>End:left" "<Primary><Alt>Home:right"; do
+# Ctrl+←/→ switch desktops and Ctrl+↑ opens Mission Control, as on macOS. Toshy (script 5) turns the physical Ctrl
+# into Super in apps (Super+←/→; Super+PageUp/PageDown on Ubuntu-based systems) and sends Ctrl+Alt+Home/End in
+# terminals. Plain Ctrl+←/→ is left alone: with Toshy that is what ⌥←/→ (jump a word) becomes.
+for k in "<Primary><Alt>End:left" "<Primary><Alt>Home:right" "<Super>Left:left" "<Super>Right:right" \
+         "<Super>Page_Down:left" "<Super>Page_Up:right"; do
   X xfce4-keyboard-shortcuts "/xfwm4/custom/${k%%:*}" string "${k##*:}_workspace_key"
 done
-X xfce4-keyboard-shortcuts "/commands/custom/<Primary>Up" string "$B/mission-control"
+for k in "<Primary>Up" "<Super>Up"; do X xfce4-keyboard-shortcuts "/commands/custom/$k" string "$B/mission-control"; done
 
 log "⌘⌥Esc (Ctrl+Alt+Esc once Toshy maps ⌘) = Force Quit, not Xfce's xkill skull cursor"
 X xfce4-keyboard-shortcuts "/commands/custom/<Primary><Alt>Escape" string xfce4-taskmanager

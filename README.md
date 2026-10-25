@@ -194,7 +194,7 @@ orb -m mintosh-test -u root bash -c 'cd 3-linux && bash 1-system-setup.sh'
 orb -m mintosh-test -u root bash test/as-user.sh 'bash 3-linux/3-macos-look.sh'
 orb -m mintosh-test -u root bash -c 'cd 3-linux && SUDO_USER=alex bash 4-macos-system.sh'
 orb -m mintosh-test -u root bash test/as-user.sh 'bash 3-linux/5-mac-shortcuts.sh'
-orb -m mintosh-test -u root python3 -I test/input-test.py             # ⌘ shortcuts, F-keys, Spaces, gestures
+orb -m mintosh-test -u root python3 -I test/mintosh-test.py           # shortcuts, Launchpad, Mission Control, gestures
 ```
 (Run these from the repo folder; OrbStack machines see the Mac's files at the same path.)
 
