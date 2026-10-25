@@ -18,7 +18,7 @@ SOURCES = {  # per machine: add extra volumes/partitions (backup-over-ssh.sh put
     "Downloads": "home/Downloads",
     "Movies": "home/Movies",
     "iTunes": "home/Music/iTunes/iTunes Media/Music",
-    "PhotosLib": "convertidos/fotos-de-la-fototeca",  # convert.py output
+    "PhotosLib": "converted/photos-library-originals",  # convert.py output
     "PhotoBooth": "home/Pictures/Photo Booth Library/Pictures",  # localized name differs, e.g. "Fototeca de Photo Booth"
     "iBooks": "home/Library/Containers/com.apple.BKAgentService/Data/Documents/iBooks/Books",
 }

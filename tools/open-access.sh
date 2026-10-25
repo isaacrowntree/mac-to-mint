@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # On THIS Mac: offer temporary SSH + password-free sudo access to a Mint machine on the same network.
-#   bash tools/servir-acceso.sh            # leave running; Ctrl+C when the other machine has run the command
+#   bash tools/open-access.sh            # leave running; Ctrl+C when the other machine has run the command
 # On the Mint machine (Terminal), run the wget line it prints; it asks for that user's password once.
-# Undo everything afterwards with: bash tools/cerrar-acceso.sh user@ip
+# Undo everything afterwards with: bash tools/close-access.sh user@ip
 set -euo pipefail
 KEY="${KEY:-$HOME/.ssh/mintosh}"
 PORT="${PORT:-8765}"
 [ -f "$KEY" ] || ssh-keygen -q -t ed25519 -N "" -C mintosh -f "$KEY"
 D=$(mktemp -d)
 trap 'rm -rf "$D"' EXIT
-cat > "$D/abrir-acceso.sh" <<EOF
+cat > "$D/grant-access.sh" <<EOF
 #!/usr/bin/env bash
-# Temporary access for setup from $(scutil --get ComputerName 2>/dev/null || hostname). Undone with tools/cerrar-acceso.sh.
+# Temporary access for setup from $(scutil --get ComputerName 2>/dev/null || hostname). Undone with tools/close-access.sh.
 set -e
 K='$(cat "$KEY.pub")'
 mkdir -p ~/.ssh && chmod 700 ~/.ssh
@@ -29,6 +29,6 @@ EOF
 IP=$(ipconfig getifaddr en0 || ipconfig getifaddr en1)
 echo "On the Mint machine, open Terminal and run:"
 echo
-echo "  wget -qO- http://$IP:$PORT/abrir-acceso.sh | bash"   # wget: always on Mint, curl may not be
+echo "  wget -qO- http://$IP:$PORT/grant-access.sh | bash"   # wget: always on Mint, curl may not be
 echo
 cd "$D" && python3 -m http.server "$PORT" --bind 0.0.0.0

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Run on the new Mint Xfce install as the normal user (NOT sudo), inside the desktop session:
-#   bash 3-apariencia-macos.sh
+#   bash 3-macos-look.sh
 # macOS look: WhiteSur theme/icons/cursor, dock (Plank) at the bottom, menu bar panel at the top with an Apple
 # logo and a macOS-style right side, Spotlight-style search, Finder-like file manager, Mac screenshots,
 # notifications and battery warnings. Safe to re-run. Best effort: each step reports, none is fatal.
-# Then: sudo bash 4-sistema-macos.sh (boot + login screen, trackpad, power) and bash 5-atajos-mac.sh (⌘ shortcuts).
+# Then: sudo bash 4-macos-system.sh (boot + login screen, trackpad, power) and bash 5-mac-shortcuts.sh (⌘ shortcuts).
 set -uo pipefail
 export TERM="${TERM:-xterm}"   # the WhiteSur installer calls setterm, which fails without TERM (e.g. over ssh)
 log() { printf '\n==> %s\n' "$*"; }
@@ -58,7 +58,7 @@ sed 's/width="48" height="48"/width="38" height="38" viewBox="5 5 38 38"/' \
   "$T/WhiteSur-gtk-theme/src/assets/gnome-shell/activities-black/activities-apple.svg" > "$I/apple-menu.svg" \
   || echo "   (Apple logo not found in the WhiteSur source)"
 gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
-cat > "$B/acerca-de" <<'EOF'
+cat > "$B/about-this-computer" <<'EOF'
 #!/usr/bin/env bash
 # "About This Mac"-style window
 model=$(cat /sys/class/dmi/id/product_name 2>/dev/null)
@@ -85,7 +85,7 @@ esac
 zenity --question --text="${q[$es]}" --ok-label="$([ $es = 1 ] && echo Aceptar || echo OK)" \
   --cancel-label="$([ $es = 1 ] && echo Cancelar || echo Cancel)" && exec xfce4-session-logout "$a"
 EOF
-chmod +x "$B/acerca-de" "$B/apple-action"
+chmod +x "$B/about-this-computer" "$B/apple-action"
 # The menu is Xfce's Applications Menu button pointed at a custom menu file: a real menu, text only, with
 # separators like macOS. Its entries live outside ~/.local/share/applications so Spotlight/Launchpad don't list them.
 rm -rf "$A/apple-menu"   # earlier version of this menu
@@ -97,7 +97,7 @@ am() {  # file, English name, Spanish name, command, icon (monochrome, like the 
   printf '[Desktop Entry]\nType=Application\nName=%s\nName[es]=%s\nExec=%s\nIcon=%s\nCategories=X-AppleMenu;\n' \
     "$2" "$3" "$4" "$5" | put "$AM/$1.desktop"
 }
-am about     "About This Computer" "Acerca de este equipo"      "$B/acerca-de"                   help-about-symbolic
+am about     "About This Computer" "Acerca de este equipo"      "$B/about-this-computer"                   help-about-symbolic
 am settings  "System Settings…"    "Configuración del sistema…" xfce4-settings-manager           emblem-system-symbolic
 am store     "App Store…"          "Tienda de aplicaciones…"    mintinstall                      system-software-install-symbolic
 am forcequit "Force Quit…"         "Forzar salida…"             xfce4-taskmanager                process-stop-symbolic
@@ -310,7 +310,7 @@ for id in $ids; do
   # launchers and the show-desktop button. Also the Windows-style window buttons (the dock shows open apps), the
   # Whisker app menu (replaced by the Apple menu + Launchpad) and the small fixed gaps between them.
   if [ "$t" = showdesktop ] || [ "$t" = tasklist ] || [ "$t" = whiskermenu ] || [ "$t" = windowck-plugin ] \
-     || { [ "$t" = launcher ] && grep -qs "^Exec=$B/acerca-de" "$HOME/.config/xfce4/panel/launcher-$id"/*.desktop; } \
+     || { [ "$t" = launcher ] && grep -qs "^Exec=$B/about-this-computer" "$HOME/.config/xfce4/panel/launcher-$id"/*.desktop; } \
      || { [ "$t" = separator ] && [ "$(xfconf-query -c xfce4-panel -p "/plugins/plugin-$id/expand" 2>/dev/null)" != true ]; } \
      || { [ "$t" = launcher ] && grep -qsE "^Exec=(mintlocale|firefox|xfce4-terminal|thunar)( |$)" \
           "$HOME/.config/xfce4/panel/launcher-$id"/*.desktop; }; then
@@ -414,7 +414,7 @@ exec rofi -show window -show-icons -window-thumbnail -window-format '{t}' -theme
   -me-select-entry '' -me-accept-entry MousePrimary
 EOF
 chmod +x "$B/mission-control"
-cat > "$B/gesto" <<'EOF'
+cat > "$B/gesture" <<'EOF'
 #!/usr/bin/env bash
 # macOS thumb-and-three-finger gestures: pinch = Launchpad, spread = show the desktop (pinch again brings windows back)
 desk() { wmctrl -m | grep -q '"showing the desktop" mode: ON'; }
@@ -423,7 +423,7 @@ case "$1" in
   spread) if pkill -x rofi; then :; elif desk; then wmctrl -k off; else wmctrl -k on; fi ;;
 esac
 EOF
-chmod +x "$B/gesto"
+chmod +x "$B/gesture"
 mkdir -p "$HOME/.config/touchegg"
 cat > "$HOME/.config/touchegg/touchegg.conf" <<EOF
 <touchégg>
@@ -439,10 +439,10 @@ cat > "$HOME/.config/touchegg/touchegg.conf" <<EOF
       <action type="RUN_COMMAND"><repeat>false</repeat><command>$B/mission-control</command><on>begin</on></action>
     </gesture>
     <gesture type="PINCH" fingers="4" direction="IN">
-      <action type="RUN_COMMAND"><repeat>false</repeat><command>$B/gesto pinch</command><on>begin</on></action>
+      <action type="RUN_COMMAND"><repeat>false</repeat><command>$B/gesture pinch</command><on>begin</on></action>
     </gesture>
     <gesture type="PINCH" fingers="4" direction="OUT">
-      <action type="RUN_COMMAND"><repeat>false</repeat><command>$B/gesto spread</command><on>begin</on></action>
+      <action type="RUN_COMMAND"><repeat>false</repeat><command>$B/gesture spread</command><on>begin</on></action>
     </gesture>
   </application>
 </touchégg>
@@ -516,11 +516,17 @@ for m in "<Shift><Super>" "<Primary><Shift>"; do
   X xfce4-keyboard-shortcuts "/commands/custom/${m}4" string "xfce4-screenshooter -r -s $DESK"
 done
 
-log "Keyboard: Spanish (matches the Air's keys) + English US, switch with Alt+Shift"
+log "Keyboard: US English${KBD:+, plus ${KBD%%,*} (switch with Alt+Shift)}"
+# English only by default. A second keyboard layout is opt-in: KBD=es bash 3-macos-look.sh  (es, fr, de, latam, ...)
 X keyboard-layout /Default/XkbDisable bool false
-X keyboard-layout /Default/XkbLayout string "es,us"
-X keyboard-layout /Default/XkbVariant string ","
-X keyboard-layout /Default/XkbOptions/Group string "grp:alt_shift_toggle"
+if [ -n "${KBD:-}" ]; then
+  X keyboard-layout /Default/XkbLayout string "$KBD,us"
+  X keyboard-layout /Default/XkbVariant string ","
+  X keyboard-layout /Default/XkbOptions/Group string "grp:alt_shift_toggle"
+else
+  X keyboard-layout /Default/XkbLayout string "us"
+  X keyboard-layout /Default/XkbVariant string ""
+fi
 
 log "One desktop, as a Mac starts with (Mint's four meant windows could seem to vanish to another one)"
 X xfwm4 /general/workspace_count int 1
@@ -566,7 +572,7 @@ X xfce4-power-manager $P/lid-action-on-battery uint 1           # close the lid 
 X xfce4-power-manager $P/lid-action-on-ac uint 1
 X xfce4-power-manager $P/critical-power-level uint 5
 X xfce4-power-manager $P/critical-power-action uint 1           # sleep (keeps open work) rather than shut down
-cat > "$B/aviso-bateria" <<'EOF'
+cat > "$B/battery-warning" <<'EOF'
 #!/usr/bin/env bash
 # macOS-style "Low Battery" warnings at 20 % and 10 % while unplugged (a few KB of memory, checks once a minute)
 BAT=$(ls -d /sys/class/power_supply/BAT* 2>/dev/null | head -1); [ -n "$BAT" ] || exit 0
@@ -589,15 +595,15 @@ while sleep 60; do
   done
 done
 EOF
-chmod +x "$B/aviso-bateria"
-printf '[Desktop Entry]\nType=Application\nName=Low battery warning\nExec=%s\nNoDisplay=true\n' "$B/aviso-bateria" \
-  > "$HOME/.config/autostart/aviso-bateria.desktop"
-pgrep -f "$B/aviso-bateria" >/dev/null || (setsid "$B/aviso-bateria" >/dev/null 2>&1 &)
+chmod +x "$B/battery-warning"
+printf '[Desktop Entry]\nType=Application\nName=Low battery warning\nExec=%s\nNoDisplay=true\n' "$B/battery-warning" \
+  > "$HOME/.config/autostart/battery-warning.desktop"
+pgrep -f "$B/battery-warning" >/dev/null || (setsid "$B/battery-warning" >/dev/null 2>&1 &)
 
 log "Chrome and Gemini follow the system language (Settings > Languages), checked at each login"
 # Chrome keeps the website languages it was given when the profile was made (English here), so Spanish pages and
 # Gemini came up in English with a Translate offer. Before Chrome starts, put the system language first.
-cat > "$B/chrome-idioma" <<'EOF'
+cat > "$B/chrome-language" <<'EOF'
 #!/usr/bin/env python3
 """Set Chrome's website languages from the system language. Only while Chrome is closed (it rewrites the file)."""
 import json, os, subprocess
@@ -624,23 +630,25 @@ for prof in ("Default",):
     json.dump(d, open(p + ".tmp", "w"))
     os.replace(p + ".tmp", p)
 EOF
-chmod +x "$B/chrome-idioma"
-printf '[Desktop Entry]\nType=Application\nName=Chrome language\nExec=%s\nNoDisplay=true\n' "$B/chrome-idioma" \
-  > "$HOME/.config/autostart/chrome-idioma.desktop"
-"$B/chrome-idioma" || true
+chmod +x "$B/chrome-language"
+printf '[Desktop Entry]\nType=Application\nName=Chrome language\nExec=%s\nNoDisplay=true\n' "$B/chrome-language" \
+  > "$HOME/.config/autostart/chrome-language.desktop"
+"$B/chrome-language" || true
 
+if [ -n "${KBD:-}" ]; then   # only for two-language setups
 log "How-to note on the desktop"
-cat > "$DESK/Change language - Cambiar idioma.txt" <<'EOF'
-English -> Español
-  Menu > Settings > Languages  (Menú > Configuración > Idiomas)
-  Pick "Español (Colombia)", click "Apply System-Wide", then log out and back in.
-
-Español -> English
-  Menú > Configuración > Idiomas, elija "English (United States)",
-  pulse "Aplicar a todo el sistema" y cierre sesión.
-
-Keyboard / Teclado:  Alt + Shift switches Spanish <-> English keys (ES / US in the top bar).
+cat > "$DESK/Change language.txt" <<EOF
+Display language:  Menu > Settings > Languages, pick the language, click "Apply System-Wide",
+                   then log out and back in.
+Keyboard:          Alt + Shift switches between ${KBD%%,*} and US English keys (shown in the top bar).
 EOF
+fi
 
 # No panel restart here: restarting it can take the Wi-Fi, Bluetooth and update icons down with it
+# Helpers used to have Spanish names; remove old copies so a re-run on an older install doesn't run two of each
+for old in aviso-bateria chrome-idioma acerca-de gesto; do
+  rm -f "$B/$old" "$HOME/.config/autostart/$old.desktop"
+done
+pkill -f "^bash $B/aviso-bateria$" 2>/dev/null || true
+
 log "Done. Log out and back in to see everything applied."

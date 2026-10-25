@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# On THIS Mac: undo tools/servir-acceso.sh on the Mint machine and delete the key here.
-#   bash tools/cerrar-acceso.sh user@ip
+# On THIS Mac: undo tools/open-access.sh on the Mint machine and delete the key here.
+#   bash tools/close-access.sh user@ip
 # Removes the key from authorized_keys, then (a few seconds later, from a systemd unit, so this SSH session
 # isn't cut off half-way) turns SSH off and deletes the password-free sudo rule.
 set -euo pipefail
@@ -9,7 +9,7 @@ KEY="${KEY:-$HOME/.ssh/mintosh}"
 PUB=$(cut -d' ' -f2 "$KEY.pub")
 ssh -o IdentitiesOnly=yes -i "$KEY" "$DEST" "
   sed -i '\#$PUB#d' ~/.ssh/authorized_keys
-  sudo systemd-run --on-active=5 --unit=cerrar-acceso-\$(date +%s) \
+  sudo systemd-run --on-active=5 --unit=close-access-\$(date +%s) \
     sh -c 'systemctl disable --now ssh.socket ssh; rm -f /etc/sudoers.d/99-mintosh-setup'
   echo 'Access removed on the Mint machine.'"
 sleep 10

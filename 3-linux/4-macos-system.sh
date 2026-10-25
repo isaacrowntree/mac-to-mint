@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Run on the Mint install after 3-apariencia-macos.sh (it uses the WhiteSur files that script downloads):
-#   sudo bash 4-sistema-macos.sh
+# Run on the Mint install after 3-macos-look.sh (it uses the WhiteSur files that script downloads):
+#   sudo bash 4-macos-system.sh
 # Mac-like boot (black screen, Apple logo, progress bar, no GRUB menu), Mac-like login screen (blurred wallpaper,
 # round account picture, WhiteSur theme), Mac trackpad behaviour, battery saving, and the tools scripts 3/5 use.
-# Account picture: 3-linux/mac-assets/avatar.png (0-enviar-desde-mac.sh makes it from a macOS default picture).
+# Account picture: 3-linux/mac-assets/avatar.png (0-send-from-mac.sh makes it from a macOS default picture).
 # Safe to re-run. Log out (trackpad, login screen) or reboot (boot screen) to see the changes.
 set -uo pipefail
 cd "$(dirname "$0")"
@@ -78,7 +78,7 @@ EOF
   update-alternatives --set default.plymouth "$PT/macos.plymouth"
   update-initramfs -u
 else
-  echo "   Apple logo not found - run 3-apariencia-macos.sh first"
+  echo "   Apple logo not found - run 3-macos-look.sh first"
 fi
 
 log "No GRUB menu at start-up (hold Shift or press Esc while starting to see it)"

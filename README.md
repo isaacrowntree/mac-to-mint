@@ -20,7 +20,8 @@ make it look and work like macOS, so whoever used the Mac doesn't have to relear
 | ![Launchpad](docs/screenshots/4-launchpad.jpg) **Launchpad** (F4, dock, pinch) | ![Mission Control](docs/screenshots/5-mission-control.jpg) **Mission Control** (three-finger swipe up, F3) |
 | ![Login screen](docs/screenshots/6-login.jpg) **Login screen** | |
 
-<sub>Real screenshots from the 2013 MacBook Air at 1366x768, with the system in Spanish (it switches with English).
+<sub>Real screenshots from the 2013 MacBook Air at 1366x768. That machine was set up with Spanish as a second language,
+which is why the menus are in Spanish; by default everything is English.
 Finder's sidebar is hidden and the login screen shows a demo account.</sub>
 
 It all runs on a 4 GB, 2013 MacBook Air: the search and launcher windows only exist while open, so nothing extra
@@ -31,8 +32,7 @@ themes and [Toshy](https://github.com/RedBearAK/toshy); this repo wires them, an
 The hardware fixes only switch on when that hardware is present.
 
 **Status:** tested end to end on one MacBookAir6,1 (2013) with Mint 22.3 Xfce, in English and Spanish. Other
-models and versions should mostly work but are untested - issues and pull requests welcome. Script names and some
-folder names are in Spanish because the first user was Spanish-speaking; the system itself starts in English.
+models and versions should mostly work but are untested - issues and pull requests welcome.
 
 No personal data lives in this repo. Backups go in `$BACKUP_DIR` on the helper Mac (e.g. `~/backups/<machine>`).
 
@@ -49,13 +49,13 @@ No personal data lives in this repo. Backups go in `$BACKUP_DIR` on the helper M
 
 ### 2. Convert and organise (on the helper Mac)
 ```
-python3 -I 2-organize/convert.py   $BACKUP_DIR/home $BACKUP_DIR/convertidos   # Mail, Contacts, Calendar, Notes, Safari, Photos
+python3 -I 2-organize/convert.py   $BACKUP_DIR/home $BACKUP_DIR/converted   # Mail, Contacts, Calendar, Notes, Safari, Photos
 python3 -I 2-organize/inventory.py $BACKUP_DIR $BACKUP_DIR/report               # sizes, kinds, duplicates, junk
 # edit the SOURCE RULES in organize.py for this machine, then:
-python3 -I 2-organize/organize.py  $BACKUP_DIR $BACKUP_DIR/organizado --dry-run
-python3 -I 2-organize/organize.py  $BACKUP_DIR $BACKUP_DIR/organizado
+python3 -I 2-organize/organize.py  $BACKUP_DIR $BACKUP_DIR/organized --dry-run
+python3 -I 2-organize/organize.py  $BACKUP_DIR $BACKUP_DIR/organized
 ```
-The raw backup is never modified; `organizado/` is built with APFS clones (no extra space) and `_registro/`
+The raw backup is never modified; `organized/` is built with APFS clones (no extra space) and `_log/`
 logs every file kept, every duplicate skipped (with the copy kept) and every junk file dropped.
 
 ### 3. Install Mint
@@ -71,33 +71,36 @@ logs every file kept, every duplicate skipped (with the copy kept) and every jun
 
 ### 4. Set up (on the new install)
 ```
-sudo apt install openssh-server                                       # on the new install
-BACKUP_DIR=~/backups/<machine> bash 3-linux/0-enviar-desde-mac.sh user@ip   # from the helper Mac
-cd ~/respaldo-mac/3-linux
-sudo bash 1-configurar-sistema.sh     # hardware fixes, languages, Chrome, LibreOffice, fonts, printers... then reboot
-bash 2-restaurar-datos.sh             # organizado/ -> Desktop, Documents, Pictures, Music, Videos
-bash 3-apariencia-macos.sh            # macOS look (run inside the desktop session)
-sudo bash 4-sistema-macos.sh          # boot + login screen, trackpad, battery saving (after script 3)
-bash 5-atajos-mac.sh                  # Mac keyboard shortcuts (Toshy); then log out and back in
+sudo apt install openssh-server                                          # on the new install
+BACKUP_DIR=~/backups/<machine> bash 3-linux/0-send-from-mac.sh user@ip   # from the helper Mac
+cd ~/mac-setup/3-linux
+sudo bash 1-system-setup.sh   # hardware fixes, Chrome, LibreOffice, fonts, printers... then reboot
+bash 2-restore-files.sh       # organized/ -> Desktop, Documents, Pictures, Music, Videos
+bash 3-macos-look.sh          # macOS look (run inside the desktop session)
+sudo bash 4-macos-system.sh   # boot + login screen, trackpad, battery saving (after script 3)
+bash 5-mac-shortcuts.sh       # Mac keyboard shortcuts (Toshy); then restart
 ```
+English only by default. For a second language add `LANG2=es_CO` to script 1 (`sudo LANG2=es_CO bash
+1-system-setup.sh`) and `KBD=es` to script 3 for a second keyboard layout.
 Then: Timeshift (system only, daily), sign in to Chrome, import Safari bookmarks if needed, delete
-`~/respaldo-mac`, remove the helper key from `~/.ssh/authorized_keys`, and turn SSH off:
+`~/mac-setup`, remove the helper key from `~/.ssh/authorized_keys`, and turn SSH off:
 `sudo systemctl disable --now ssh.socket ssh` (Mint 22 listens through `ssh.socket` as well).
 
-To come back later (re-run scripts 3-5 after changes): `bash tools/servir-acceso.sh` on the helper Mac prints a
+To come back later (re-run scripts 3-5 after changes): `bash tools/open-access.sh` on the helper Mac prints a
 `wget ... | bash` line to run on the Mint machine (temporary key + password-free sudo + SSH on). Then
-`bash 3-linux/0-enviar-desde-mac.sh user@ip` (no BACKUP_DIR: sends only the scripts), run them, and
-`bash tools/cerrar-acceso.sh user@ip` to undo the access.
+`bash 3-linux/0-send-from-mac.sh user@ip` (no BACKUP_DIR: sends only the scripts), run them, and
+`bash tools/close-access.sh user@ip` to undo the access.
 
-> **Safety:** `servir-acceso.sh` serves its script over plain HTTP on your local network, and running it gives the
+> **Safety:** `open-access.sh` serves its script over plain HTTP on your local network, and running it gives the
 > helper Mac SSH access with password-free sudo. Use it only on a network you trust, keep the server running only
-> until the command has been run, and always finish with `cerrar-acceso.sh`. Read the served script before running
+> until the command has been run, and always finish with `close-access.sh`. Read the served script before running
 > it - the same goes for any `wget | bash`.
-Keep a second copy of `organizado/` + `convertidos/` before deleting the raw backup.
+Keep a second copy of `organized/` + `converted/` before deleting the raw backup.
 
 ## What the scripts set up
-- **System:** English default + a second language (`LANG2`, default `es_CO`), switchable in Settings > Languages;
-  keyboard layouts switch with Alt+Shift (ES/US in the top bar). Chrome as default browser, LibreOffice saving
+- **System:** English only by default. Optional second language: `LANG2=es_CO` for script 1 (language packs,
+  LibreOffice, spell check; switch in Settings > Languages) and `KBD=es` for script 3 (a second keyboard layout,
+  Alt+Shift, shown in the top bar). Chrome as default browser, LibreOffice saving
   .docx/.xlsx/.pptx by default, MS core fonts + Carlito/Caladea, Inter (SF Pro stand-in), Epson/Canon drivers,
   automatic updates, password login (autologin off so the keyring unlocks itself).
 - **macOS look:** WhiteSur theme, `WhiteSur-light` icons (plain `WhiteSur` icons are white and vanish in a light
@@ -107,8 +110,8 @@ Keep a second copy of `organizado/` + `convertidos/` before deleting the raw bac
 - **Menu bar:** Apple menu (Xfce's Applications Menu on a custom `.menu` file: About This Computer, System
   Settings, App Store, Force Quit, Sleep, Restart, Shut Down, Lock Screen, Log Out, with separators), then the
   global menu (`xfce4-appmenu-plugin`: active app's name in bold + its File/Edit/View menus, out of the window;
-  works for Chrome, LibreOffice and GTK apps). Right side as on macOS: ES/US, tray icons, Wi-Fi, volume, battery %,
-  "dom 25 oct 3:42 PM", Search, Gemini. Regular-weight text (WhiteSur makes it bold). Mint's Firefox/Terminal/Files
+  works for Chrome, LibreOffice and GTK apps). Right side as on macOS: keyboard layout, tray icons, Wi-Fi, volume,
+  battery %, "Sun 25 Oct 3:42 PM", Search, Gemini. Regular-weight text (WhiteSur makes it bold). Mint's Firefox/Terminal/Files
   launchers, show-desktop, window buttons and Languages button are removed.
 - **Spotlight (⌘Space) and Launchpad (F4, dock):** rofi, not Ulauncher: it starts on demand and exits, so it uses no
   memory while closed (Ulauncher stays resident, ~100 MB+, too much for 4 GB). Spotlight: Sonoma-style bar, results
@@ -123,8 +126,8 @@ Keep a second copy of `organizado/` + `convertidos/` before deleting the raw bac
   One desktop, as a Mac starts with.
 - **Battery:** dims on battery, lid = sleep, sleeps at 5 %, "Low Battery" warnings at 20 % and 10 % (UPower's
   figure, as in the menu bar; the kernel's `capacity` reads lower on this Mac), TLP.
-- **Chrome language:** at each login Chrome's website languages are set from the system language (es-CO first when
-  the system is Spanish) and the Translate pop-up is off for those two languages. Chrome must be closed for this.
+- **Chrome language:** at each login Chrome's website languages are set from the system language (e.g. es-CO
+  first when the system is switched to Spanish) and the Translate pop-up is off for those languages. Chrome must be closed for this.
 - **Gemini:** Google's assistant as its own app window (Chrome `--app`), with a button at the far right of the menu
   bar where Siri was on macOS 10.12 (sparkle on a white circle so it shows on any wallpaper). There's no
   Gemini desktop app for Linux. Chrome's built-in "Gemini in Chrome" and its dictation into web text boxes
@@ -132,7 +135,7 @@ Keep a second copy of `organizado/` + `convertidos/` before deleting the raw bac
   The Apple logo and Gemini icon are downloaded at run time (WhiteSur source, gstatic), not stored here.
 
 ## Hardware notes (MacBookAir6,1, 2013) - most apply to 2013-2015 MacBooks
-| Problem | Fix (in `1-configurar-sistema.sh`, gated on the hardware) |
+| Problem | Fix (in `1-system-setup.sh`, gated on the hardware) |
 |---|---|
 | SSD invisible to the installer; `ata1: failed to IDENTIFY` (Marvell 88SS9183, `1b4b:9183`) | boot with `intel_iommu=off` |
 | Desktop freezes after ~1 h, hundreds of `ata1: hard resetting link`, I/O errors | SATA link power saving off: `ahci.mobile_lpm_policy=1` |

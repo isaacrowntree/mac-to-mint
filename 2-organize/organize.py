@@ -1,8 +1,8 @@
 """Build a reorganised, de-duplicated copy of a Mac backup: <out_dir>/{Desktop,Documents,Pictures,Music,Videos}.
 
 Usage: python3 -I organize.py <backup_root> <out_dir> [--dry-run]
-Never modifies the backup: files are APFS-cloned (cp -c) into out_dir. Logs everything in out_dir/_registro/:
-copiados.tsv (kept), duplicados-omitidos.tsv (skipped duplicate -> kept copy), basura-omitida.tsv (junk).
+Never modifies the backup: files are APFS-cloned (cp -c) into out_dir. Logs everything in out_dir/_log/:
+copied.tsv (kept), skipped-duplicates.tsv (skipped duplicate -> kept copy), skipped-junk.tsv (junk).
 
 How it works: each source file is added as a candidate (priority, source, destination). Identical files (sha256)
 keep only the lowest-priority-number copy, preferring names without " 2"/" copia"/"(1)" suffixes.
@@ -27,7 +27,7 @@ DRY = "--dry-run" in sys.argv
 NFC = lambda s: unicodedata.normalize("NFC", s)  # noqa: E731
 H = os.path.join(B, "home")
 MM = os.path.join(B, "Datos", "datos mac mini")  # example: older Mac's files on an extra partition
-CONV = os.path.join(B, "convertidos")  # convert.py output
+CONV = os.path.join(B, "converted")  # convert.py output
 
 JUNK_NAMES = {".DS_Store", "Thumbs.db", "desktop.ini", ".localized", "Icon\r", "PkgInfo", "Recents.plist"}
 JUNK_EXT = set("ipa itc tagset itl itdb lij lisj plist db graphdb graphdb-wal graphdb-shm skindex data cmap "
@@ -84,7 +84,7 @@ for p, rel in walk(os.path.join(H, "Desktop")):
     if is_junk(rel):
         dropped.append(("junk", p)); continue
     if rel.split(os.sep)[0] == "Downloads":
-        add(90, p, os.path.join("Documents", "Descargas del Mac", rel.split(os.sep, 1)[1])); continue
+        add(90, p, os.path.join("Documents", "Mac Downloads", rel.split(os.sep, 1)[1])); continue
     if ext(rel) in VIDEO:
         add(0, p, os.path.join("Videos", rel)); continue
     add(0, p, os.path.join("Desktop", rel))
@@ -96,9 +96,9 @@ for p, rel in walk(os.path.join(H, "Documents")):
     top = rel.split(os.sep)[0]
     e = ext(rel)
     if BOOK_DIR.match(top.strip()):
-        add(10, p, os.path.join("Documents", "Libros", rel))
+        add(10, p, os.path.join("Documents", "Books", rel))
     elif e in AUDIO:
-        add(10, p, os.path.join("Music", "Audiolibros", rel))
+        add(10, p, os.path.join("Music", "Audiobooks", rel))
     elif top == "videos" or (e in VIDEO and not PHOTO_DIR.search(top)):
         add(10, p, os.path.join("Videos", rel.split(os.sep, 1)[1] if top == "videos" else rel))
     elif os.sep in rel and PHOTO_DIR.search(top):
@@ -107,8 +107,8 @@ for p, rel in walk(os.path.join(H, "Documents")):
         add(10, p, os.path.join("Documents", rel))
 
 # --- Air Photos library originals (already extracted) + Photo Booth (prio 20)
-for p, rel in walk(os.path.join(CONV, "fotos-de-la-fototeca")):
-    add(20, p, os.path.join("Pictures", "Fototeca Mac", rel))
+for p, rel in walk(os.path.join(CONV, "photos-library-originals")):
+    add(20, p, os.path.join("Pictures", "Mac Photos", rel))
 for p, rel in walk(os.path.join(H, "Pictures", "Fototeca de Photo Booth", "Pictures")):  # localized: "Photo Booth Library" in English
     if not is_junk(rel):
         add(20, p, os.path.join("Pictures", "Photo Booth", rel))
@@ -117,7 +117,7 @@ for p, rel in walk(os.path.join(H, "Pictures", "Fototeca de Photo Booth", "Pictu
 IB = os.path.join(H, "Library/Containers/com.apple.BKAgentService/Data/Documents/iBooks/Books")
 for p, rel in walk(IB):
     if os.sep not in rel and ext(rel) == "pdf":
-        add(25, p, os.path.join("Documents", "Libros", "iBooks", rel))
+        add(25, p, os.path.join("Documents", "Books", "iBooks", rel))
 
 # --- Datos loose files (prio 30)
 for p, rel in walk(os.path.join(B, "Datos")):
@@ -125,7 +125,7 @@ for p, rel in walk(os.path.join(B, "Datos")):
         continue
     if is_junk(rel):
         dropped.append(("junk", p)); continue
-    add(30, p, os.path.join("Documents", "Datos 2022-2024", rel.strip()))
+    add(30, p, os.path.join("Documents", "Data partition", rel.strip()))
 
 # --- Mac mini
 for p, rel in walk(os.path.join(MM, "imagenes")):
@@ -136,16 +136,16 @@ for p, rel in walk(os.path.join(MM, "escritorio")):
     if is_junk(rel):
         dropped.append(("junk", p)); continue
     if ext(rel) == "pdf":
-        add(40, p, os.path.join("Documents", "Libros", "Mac mini", os.path.basename(rel)))
+        add(40, p, os.path.join("Documents", "Books", "Mac mini", os.path.basename(rel)))
     else:
-        add(40, p, os.path.join("Pictures", "Mac mini", "escritorio", rel))
+        add(40, p, os.path.join("Pictures", "Mac mini", "Desktop", rel))
 for p, rel in walk(os.path.join(MM, "musica")):
     if is_junk(rel) or rel.split(os.sep)[0] == "Audio Music Apps":
         dropped.append(("junk", p)); continue
     if rel.split(os.sep)[0] == "Capture":  # webcam snapshots saved under musica
-        add(45, p, os.path.join("Pictures", "Mac mini", "Capturas webcam", os.path.basename(rel))); continue
+        add(45, p, os.path.join("Pictures", "Mac mini", "Webcam captures", os.path.basename(rel))); continue
     if ext(rel) == "m4b" or rel.lower().startswith("audiolibros"):
-        add(45, p, os.path.join("Music", "Audiolibros", rel.split(os.sep, 1)[-1]))
+        add(45, p, os.path.join("Music", "Audiobooks", rel.split(os.sep, 1)[-1]))
     else:
         add(45, p, os.path.join("Music", rel))
 for p, rel in walk(os.path.join(H, "Music/iTunes/iTunes Media/Music")):
@@ -163,19 +163,19 @@ for prio, sub in ((50, "documentoss"), (60, "documentos")):
         if e in VIDEO:
             add(prio, p, os.path.join("Videos", "Mac mini", rel))
         elif e in AUDIO or e == "m4b":
-            add(prio, p, os.path.join("Music", "Audiolibros", os.path.basename(rel)))
+            add(prio, p, os.path.join("Music", "Audiobooks", os.path.basename(rel)))
         else:
             add(prio, p, os.path.join("Documents", "Mac mini", rel))
 masters = os.path.join(MM, "imagenes", "fototeca.photoslibrary", "Masters")
 for p, rel in walk(masters):
     if not is_junk(rel):
-        add(70, p, os.path.join("Pictures", "Fototeca Mac mini", rel))
+        add(70, p, os.path.join("Pictures", "Mac mini Photos", rel))
 
 # --- Air Downloads (lowest)
 for p, rel in walk(os.path.join(H, "Downloads")):
     if is_junk(rel):
         dropped.append(("junk", p)); continue
-    add(90, p, os.path.join("Documents", "Descargas del Mac", rel))
+    add(90, p, os.path.join("Documents", "Mac Downloads", rel))
 
 # --- extras: personal files found outside the home folder (e.g. saved into /Applications) go here
 # add(10, os.path.join(B, "extras", "<file>"), os.path.join("Documents", "<file>"))
@@ -230,14 +230,14 @@ for prio, src, dest in sorted(keep, key=lambda c: (c[0], c[2])):
     plan.append((src, d))
     final[dest] = d
 
-reg = os.path.join(OUT, "_registro")
+reg = os.path.join(OUT, "_log")
 os.makedirs(reg, exist_ok=True)
-with open(os.path.join(reg, "copiados.tsv"), "w") as f:
+with open(os.path.join(reg, "copied.tsv"), "w") as f:
     f.writelines(f"{d}\t{s}\n" for s, d in plan)
-with open(os.path.join(reg, "duplicados-omitidos.tsv"), "w") as f:
+with open(os.path.join(reg, "skipped-duplicates.tsv"), "w") as f:
     f.write("omitido (original en el respaldo)\tse conservó como\n")
     f.writelines(f"{s}\t{final[k]}\n" for s, k in dup_log)
-with open(os.path.join(reg, "basura-omitida.tsv"), "w") as f:
+with open(os.path.join(reg, "skipped-junk.tsv"), "w") as f:
     f.writelines(f"{r}\t{s}\n" for r, s in dropped)
 
 total = sum(os.path.getsize(s) for s, _ in plan)
@@ -274,7 +274,7 @@ for d in os.listdir(IB):
                 m = re.search(r"<dc:title[^>]*>(.*?)</dc:title>", open(os.path.join(r, f), encoding="utf-8", errors="replace").read(), re.S)
                 if m:
                     title = re.sub(r'[/\\:*?"<>|]', "_", m.group(1).strip())[:80]
-    out = os.path.join(mk("Documents", "Libros", "iBooks"), NFC(title) + ".epub")
+    out = os.path.join(mk("Documents", "Books", "iBooks"), NFC(title) + ".epub")
     with zipfile.ZipFile(out, "w") as z:
         z.write(os.path.join(full, "mimetype"), "mimetype", compress_type=zipfile.ZIP_STORED)
         for r, _, fs in os.walk(full):
@@ -300,7 +300,7 @@ print("webarchive->html:", n)
 
 # Local-only emails (Drafts, Outbox, recovered) -> .eml
 MAILV4 = os.path.join(H, "Library", "Mail", "V4")
-md = mk("Documents", "Del Mac", "Correos guardados")
+md = mk("Documents", "From the Mac", "Correos guardados")
 n = 0
 for acct in os.listdir(MAILV4):
     for box in ("Drafts.mbox", "Outbox.mbox", "Mensajes recuperados (Google).mbox"):
@@ -321,6 +321,6 @@ print("emails:", n)
 
 # Notes + Safari bookmarks
 cv = CONV
-subprocess.run(["cp", "-cp", os.path.join(cv, "marcadores-safari.html"), mk("Documents", "Del Mac")], check=True)
-subprocess.run(["cp", "-cpR", os.path.join(cv, "notas") + "/", mk("Documents", "Del Mac", "Notas")], check=True)
+subprocess.run(["cp", "-cp", os.path.join(cv, "safari-bookmarks.html"), mk("Documents", "From the Mac")], check=True)
+subprocess.run(["cp", "-cpR", os.path.join(cv, "notes") + "/", mk("Documents", "From the Mac", "Notas")], check=True)
 print("done")

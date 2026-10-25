@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Run on the new Mint install as the normal user (NOT sudo):
-#   bash 2-restaurar-datos.sh
-# Expects the reorganised, de-duplicated copy next to this folder: ../organizado/{Desktop,Documents,Pictures,Music,Videos}
+#   bash 2-restore-files.sh
+# Expects the reorganised, de-duplicated copy next to this folder: ../organized/{Desktop,Documents,Pictures,Music,Videos}
 # (made by 2-organize/organize.py). Copies it into the user's folders; existing files are never overwritten.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-SRC="$(dirname "$HERE")/organizado"
+SRC="$(dirname "$HERE")/organized"
 [ -d "$SRC/Documents" ] || { echo "Missing $SRC"; exit 1; }
 log() { printf '\n==> %s\n' "$*"; }
 
@@ -27,4 +27,4 @@ for d in DESKTOP DOCUMENTS PICTURES MUSIC VIDEOS; do
 done
 echo
 echo "Next by hand: open Chrome and sign in to the Google account (bookmarks/passwords sync back)."
-echo "Old Safari bookmarks: Chrome > Bookmarks > Import > Documents/Del Mac/marcadores-safari.html (if converted)"
+echo "Old Safari bookmarks: Chrome > Bookmarks > Import > Documents/From the Mac/safari-bookmarks.html (if converted)"

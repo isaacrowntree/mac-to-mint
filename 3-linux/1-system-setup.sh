@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 # Run on the new Mint install, from the copied 3-linux folder:
-#   sudo bash 1-configurar-sistema.sh
+#   sudo bash 1-system-setup.sh
 # Installs English + a second language (English default), Chrome, LibreOffice, PDF reader, printer drivers, fonts,
 # and the fixes old Macs need (each one only runs when its hardware is present).
-# Time zone is left as chosen in the installer. Second language: LANG2=es_CO (default) / LANG2=fr_FR / ...
+# Time zone is left as chosen in the installer. English only by default; for a second language the user can switch
+# to in Settings > Languages, pass it: sudo LANG2=es_CO bash 1-system-setup.sh   (or fr_FR, de_DE, pt_BR, ...)
 set -uo pipefail
 cd "$(dirname "$0")"
 [ "$(id -u)" = 0 ] || { echo "Run with sudo"; exit 1; }
 log() { printf '\n==> %s\n' "$*"; }
 has_pci() { lspci -nn | grep -qi "$1"; }
 APPLE=$(grep -qi apple /sys/class/dmi/id/sys_vendor 2>/dev/null && echo 1 || echo 0)
-LANG2="${LANG2:-es_CO}"; L2="${LANG2%%_*}"
+LANG2="${LANG2:-}"; L2="${LANG2%%_*}"
 
 if has_pci '1b4b:9183'; then
   log "SSD: Marvell 88SS9183 (2013-14 MacBook Air/Pro) fails to IDENTIFY with the Intel IOMMU on"
@@ -31,21 +32,21 @@ printf '[connection]\nwifi.powersave = 2\n' > /etc/NetworkManager/conf.d/99-wifi
 log "Update system"
 apt-get update && apt-get -y full-upgrade
 
-log "English (default) + $LANG2, switchable in Settings > Languages"
-apt-get install -y language-pack-en language-pack-gnome-en "language-pack-$L2" "language-pack-gnome-$L2" \
-  hunspell-en-us "hunspell-$L2" || true
-locale-gen en_US.UTF-8 "$LANG2.UTF-8"
+log "English${LANG2:+ (default) + $LANG2, switchable in Settings > Languages}"
+apt-get install -y language-pack-en language-pack-gnome-en hunspell-en-us || true
+[ -z "$LANG2" ] || apt-get install -y "language-pack-$L2" "language-pack-gnome-$L2" "hunspell-$L2" || true
+locale-gen en_US.UTF-8 ${LANG2:+"$LANG2.UTF-8"}
 update-locale LANG=en_US.UTF-8 LANGUAGE=en_US:en
 
 log "Microsoft fonts so Word documents look the same"
 echo 'ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true' | debconf-set-selections
 apt-get install -y ttf-mscorefonts-installer fonts-crosextra-carlito fonts-crosextra-caladea fonts-inter   # Inter: open stand-in for Apple's SF Pro
 
-log "Office (English + $L2), Mac-look dock, tools"
+log "Office (English${L2:+ + $L2}), Mac-look dock, tools"
 apt-get install -y libreoffice libreoffice-help-en-us mythes-en-us \
   plank git sassc libglib2.0-dev-bin libxml2-utils xdotool \
   convmv rsync openssh-server
-apt-get install -y "libreoffice-l10n-$L2" "libreoffice-help-$L2" "hyphen-$L2" "mythes-$L2" || true
+[ -z "$L2" ] || apt-get install -y "libreoffice-l10n-$L2" "libreoffice-help-$L2" "hyphen-$L2" "mythes-$L2" || true
 
 log "Chrome"
 DEB=google-chrome-stable_current_amd64.deb
@@ -105,4 +106,4 @@ log "Automatic updates (security + kernel) via Mint Update Manager"
 mintupdate-automation upgrade enable || true
 mintupdate-automation autoremove enable || true
 
-log "Done. Reboot, then run 2-restaurar-datos.sh as the normal user (no sudo)."
+log "Done. Reboot, then run 2-restore-files.sh as the normal user (no sudo)."

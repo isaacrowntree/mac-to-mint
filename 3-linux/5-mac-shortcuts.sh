@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run as the normal user (NOT sudo), inside the desktop session, after scripts 3 and 4:
-#   bash 5-atajos-mac.sh
+#   bash 5-mac-shortcuts.sh
 # Mac keyboard shortcuts everywhere with Toshy (github.com/RedBearAK/toshy): ⌘C/⌘V/⌘X/⌘Z, ⌘Q quit, ⌘W close,
 # ⌘Tab switch apps, ⌘Space search, ⌘⇧3/⌘⇧4 screenshots. Swapping Ctrl and ⌘ alone would break ⌘Tab.
 # It asks for the password once (sudo) to install packages and the keyboard rules. Log out and in afterwards.

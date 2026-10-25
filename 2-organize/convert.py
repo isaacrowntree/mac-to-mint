@@ -63,9 +63,9 @@ def contacts():
             lines += [f"TEL;TYPE=CELL:{p}" for p in phones] + [f"EMAIL;TYPE=INTERNET:{m}" for m in mails]
             lines.append("END:VCARD")
             cards.append("\r\n".join(lines))
-    with open(os.path.join(OUT, "contactos.vcf"), "w", encoding="utf-8") as f:
+    with open(os.path.join(OUT, "contacts.vcf"), "w", encoding="utf-8") as f:
         f.write("\r\n".join(cards) + "\r\n")
-    return f"{len(cards)} contacts -> contactos.vcf"
+    return f"{len(cards)} contacts -> contacts.vcf"
 
 
 def safari_bookmarks():
@@ -95,9 +95,9 @@ def safari_bookmarks():
     doc = ["<!DOCTYPE NETSCAPE-Bookmark-file-1>",
            '<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">',
            "<TITLE>Bookmarks</TITLE><H1>Marcadores de Safari</H1>", "<DL><p>"] + body + ["</DL><p>"]
-    with open(os.path.join(OUT, "marcadores-safari.html"), "w", encoding="utf-8") as f:
+    with open(os.path.join(OUT, "safari-bookmarks.html"), "w", encoding="utf-8") as f:
         f.write("\n".join(doc))
-    return f"{count} bookmarks -> marcadores-safari.html"
+    return f"{count} bookmarks -> safari-bookmarks.html"
 
 
 def calendars():
@@ -114,8 +114,8 @@ def calendars():
             txt = open(ics, encoding="utf-8", errors="replace").read()
             keep += re.findall(r"BEGIN:(?:VEVENT|VTODO).*?END:(?:VEVENT|VTODO)", txt, re.S)
     data = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//macbook-air-backup//ES\r\n" + "\r\n".join(keep) + "\r\nEND:VCALENDAR\r\n"
-    open(os.path.join(OUT, "calendario.ics"), "w", encoding="utf-8").write(data)
-    return f"{len(keep)} events/reminders -> calendario.ics"
+    open(os.path.join(OUT, "calendar.ics"), "w", encoding="utf-8").write(data)
+    return f"{len(keep)} events/reminders -> calendar.ics"
 
 
 def notes():
@@ -123,7 +123,7 @@ def notes():
     rows = c.execute(
         "select o.ZTITLE1, d.ZDATA from ZICCLOUDSYNCINGOBJECT o join ZICNOTEDATA d on d.ZNOTE=o.Z_PK "
         "where o.ZTITLE1 is not null").fetchall()
-    d = os.path.join(OUT, "notas")
+    d = os.path.join(OUT, "notes")
     os.makedirs(d, exist_ok=True)
     for i, (title, blob) in enumerate(rows, 1):
         raw = gzip.decompress(blob) if blob[:2] == b"\x1f\x8b" else zlib.decompress(blob)
@@ -132,11 +132,11 @@ def notes():
         text = max(runs, key=len).decode("utf-8", "replace") if runs else ""
         safe = re.sub(r'[/\\:*?"<>|]', "_", title)[:60] or f"nota-{i}"
         open(os.path.join(d, f"{safe}.txt"), "w", encoding="utf-8").write(text)
-    return f"{len(rows)} notes -> notas/"
+    return f"{len(rows)} notes -> notes/"
 
 
 def mail():
-    d = os.path.join(OUT, "correo-archivo")
+    d = os.path.join(OUT, "mail-archive")
     os.makedirs(d, exist_ok=True)
     total = 0
     for mbox in glob.glob(os.path.join(LIB, "Mail/V4/*/*.mbox")):
@@ -162,14 +162,14 @@ def mail():
                 msg = re.sub(rb"(?m)^(>*From )", rb">\1", msg.replace(b"\r\n", b"\n"))
                 out.write(b"From MAILER-DAEMON " + when.encode() + b"\n" + msg.rstrip(b"\n") + b"\n\n")
                 total += 1
-    return f"{total} messages -> correo-archivo/*.mbox"
+    return f"{total} messages -> mail-archive/*.mbox"
 
 
 def photos():
     src = glob.glob(os.path.join(HOME, "Pictures/*.photoslibrary/Masters"))
     if not src:
         return "no Masters folder"
-    d = os.path.join(OUT, "fotos-de-la-fototeca")
+    d = os.path.join(OUT, "photos-library-originals")
     n = 0
     for root, _, files in os.walk(src[0]):
         for fn in files:
@@ -180,7 +180,7 @@ def photos():
             os.makedirs(dst, exist_ok=True)
             shutil.copy2(os.path.join(root, fn), os.path.join(dst, fn))
             n += 1
-    return f"{n} photos -> fotos-de-la-fototeca/"
+    return f"{n} photos -> photos-library-originals/"
 
 
 for name, fn in [("contacts", contacts), ("safari", safari_bookmarks), ("calendar", calendars),
