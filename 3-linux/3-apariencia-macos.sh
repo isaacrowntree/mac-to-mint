@@ -93,19 +93,19 @@ AM="$HOME/.local/share/apple-menu"; mkdir -p "$AM" "$HOME/.config/menus"
 # The panel re-reads these files as soon as they change, so write a copy and swap it in (only if different):
 # a half-written menu file pops up "Could not load the applications menu"
 put() { cat > "$1.tmp"; if cmp -s "$1.tmp" "$1"; then rm -f "$1.tmp"; else mv "$1.tmp" "$1"; fi; }
-am() {  # file, English name, Spanish name, command
-  printf '[Desktop Entry]\nType=Application\nName=%s\nName[es]=%s\nExec=%s\nCategories=X-AppleMenu;\n' "$2" "$3" "$4" \
-    | put "$AM/$1.desktop"
+am() {  # file, English name, Spanish name, command, icon (monochrome, like the SF Symbols in macOS Tahoe's menus)
+  printf '[Desktop Entry]\nType=Application\nName=%s\nName[es]=%s\nExec=%s\nIcon=%s\nCategories=X-AppleMenu;\n' \
+    "$2" "$3" "$4" "$5" | put "$AM/$1.desktop"
 }
-am about     "About This Computer" "Acerca de este equipo"      "$B/acerca-de"
-am settings  "System Settings…"    "Configuración del sistema…" xfce4-settings-manager
-am store     "App Store…"          "Tienda de aplicaciones…"    mintinstall
-am forcequit "Force Quit…"         "Forzar salida…"             xfce4-taskmanager
-am sleep     "Sleep"               "Reposo"                     "xfce4-session-logout --suspend"
-am restart   "Restart…"            "Reiniciar…"                 "$B/apple-action restart"
-am shutdown  "Shut Down…"          "Apagar…"                    "$B/apple-action shutdown"
-am lock      "Lock Screen"         "Bloquear pantalla"          xflock4
-am logout    "Log Out…"            "Cerrar sesión…"             "$B/apple-action logout"
+am about     "About This Computer" "Acerca de este equipo"      "$B/acerca-de"                   help-about-symbolic
+am settings  "System Settings…"    "Configuración del sistema…" xfce4-settings-manager           emblem-system-symbolic
+am store     "App Store…"          "Tienda de aplicaciones…"    mintinstall                      system-software-install-symbolic
+am forcequit "Force Quit…"         "Forzar salida…"             xfce4-taskmanager                process-stop-symbolic
+am sleep     "Sleep"               "Reposo"                     "xfce4-session-logout --suspend" weather-clear-night-symbolic
+am restart   "Restart…"            "Reiniciar…"                 "$B/apple-action restart"        system-reboot-symbolic
+am shutdown  "Shut Down…"          "Apagar…"                    "$B/apple-action shutdown"       system-shutdown-symbolic
+am lock      "Lock Screen"         "Bloquear pantalla"          xflock4                          system-lock-screen-symbolic
+am logout    "Log Out…"            "Cerrar sesión…"             "$B/apple-action logout"         system-log-out-symbolic
 APPLE_MENU="$HOME/.config/menus/apple-menu.menu"
 put "$APPLE_MENU" <<EOF
 <!DOCTYPE Menu PUBLIC "-//freedesktop//DTD Menu 1.0//EN" "http://www.freedesktop.org/standards/menu-spec/1.0/menu.dtd">
@@ -250,7 +250,7 @@ for p in $(apple_menus); do
   X xfce4-panel "$p/custom-menu" bool true
   X xfce4-panel "$p/button-icon" string apple-menu
   X xfce4-panel "$p/show-button-title" bool false
-  X xfce4-panel "$p/show-menu-icons" bool false
+  X xfce4-panel "$p/show-menu-icons" bool true
   X xfce4-panel "$p/show-tooltips" bool false
   X xfce4-panel "$p/show-generic-names" bool false
 done
@@ -261,7 +261,8 @@ cat >> "$HOME/.config/gtk-3.0/gtk.css" <<'EOF'
 /* mac-to-mint panel */
 .xfce4-panel.background, .xfce4-panel.background button, .xfce4-panel.background button.flat { font-weight: 500; }
 /* room around the Apple logo, as on macOS */
-#applicationmenu-button { padding: 0 12px 0 16px; }
+.xfce4-panel.background button#applicationmenu-button,
+.xfce4-panel.background button.flat#applicationmenu-button { padding: 0 14px 0 18px; }   /* beats WhiteSur's button rule */
 /* mac-to-mint end */
 EOF
 # The Gemini button keeps the icon of the .desktop copy the panel made when it was added; refresh it
@@ -390,13 +391,14 @@ for d in DOCUMENTS DOWNLOAD PICTURES MUSIC VIDEOS; do
   grep -q "^$u\( \|$\)" "$BM" || echo "$u" >> "$BM"
 done
 
-log "Mission Control: three-finger swipe up (or F3) shows all open windows; pinch with four fingers = Launchpad"
+log "Mission Control: three-finger swipe up or down (or F3) opens and closes a view of all open windows; pinch with four fingers = Launchpad"
 # rofi's window list as a grid of live window previews (nothing runs while it's closed; -window-thumbnail needs
 # -show-icons or the previews stay blank). Touchegg (script 4) turns trackpad gestures into these commands.
 cat > "$HOME/.local/share/rofi/themes/mission.rasi" <<'EOF'
 * { font: "Inter 11"; background-color: transparent; text-color: #ffffff; }
-window { fullscreen: true; background-color: #1c1c1e; }
-mainbox { children: [ listview ]; padding: 8% 7%; }
+/* not full screen: a margin all round, so clicking outside the windows closes it, as on macOS */
+window { location: center; width: 94%; height: 90%; border-radius: 16px; background-color: #1c1c1ee8; }
+mainbox { children: [ listview ]; padding: 5% 5%; }
 listview { columns: 3; lines: 2; flow: horizontal; fixed-columns: true; spacing: 28px; scrollbar: false; }
 element { orientation: vertical; padding: 8px; spacing: 6px; border-radius: 12px; }
 element selected.normal { background-color: #ffffff2e; }
@@ -423,7 +425,7 @@ cat > "$HOME/.config/touchegg/touchegg.conf" <<EOF
       <action type="RUN_COMMAND"><repeat>false</repeat><command>$B/mission-control</command><on>begin</on></action>
     </gesture>
     <gesture type="SWIPE" fingers="3" direction="DOWN">
-      <action type="RUN_COMMAND"><repeat>false</repeat><command>pkill -x rofi</command><on>begin</on></action>
+      <action type="RUN_COMMAND"><repeat>false</repeat><command>$B/mission-control</command><on>begin</on></action>
     </gesture>
     <gesture type="PINCH" fingers="4" direction="IN">
       <action type="RUN_COMMAND"><repeat>false</repeat><command>$B/launchpad</command><on>begin</on></action>
@@ -565,7 +567,7 @@ while sleep 60; do
       es*) t="Batería baja"; m="Queda $cap % de batería. Conecte el cargador pronto." ;;
       *)   t="Low Battery";  m="$cap% battery remaining. Plug in to a power outlet soon." ;;
     esac
-    notify-send -u critical -i battery-caution -a Battery "$t" "$m"
+    notify-send -u normal -t 10000 -i battery-caution -a Battery "$t" "$m"   # goes away by itself after 10 s
     break
   done
 done
