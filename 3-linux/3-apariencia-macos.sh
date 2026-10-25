@@ -391,7 +391,7 @@ for d in DOCUMENTS DOWNLOAD PICTURES MUSIC VIDEOS; do
   grep -q "^$u\( \|$\)" "$BM" || echo "$u" >> "$BM"
 done
 
-log "Mission Control: three-finger swipe up or down (or F3) opens and closes a view of all open windows; pinch with four fingers = Launchpad"
+log "Mission Control: three-finger swipe up or down (or F3) opens and closes a view of all open windows; thumb + three fingers: pinch = Launchpad, spread = desktop"
 # rofi's window list as a grid of live window previews (nothing runs while it's closed; -window-thumbnail needs
 # -show-icons or the previews stay blank). Touchegg (script 4) turns trackpad gestures into these commands.
 cat > "$HOME/.local/share/rofi/themes/mission.rasi" <<'EOF'
@@ -414,6 +414,16 @@ exec rofi -show window -show-icons -window-thumbnail -window-format '{t}' -theme
   -me-select-entry '' -me-accept-entry MousePrimary
 EOF
 chmod +x "$B/mission-control"
+cat > "$B/gesto" <<'EOF'
+#!/usr/bin/env bash
+# macOS thumb-and-three-finger gestures: pinch = Launchpad, spread = show the desktop (pinch again brings windows back)
+desk() { wmctrl -m | grep -q '"showing the desktop" mode: ON'; }
+case "$1" in
+  pinch)  if desk; then wmctrl -k off; else exec "$HOME/.local/bin/launchpad"; fi ;;
+  spread) if pkill -x rofi; then :; elif desk; then wmctrl -k off; else wmctrl -k on; fi ;;
+esac
+EOF
+chmod +x "$B/gesto"
 mkdir -p "$HOME/.config/touchegg"
 cat > "$HOME/.config/touchegg/touchegg.conf" <<EOF
 <touchégg>
@@ -429,10 +439,10 @@ cat > "$HOME/.config/touchegg/touchegg.conf" <<EOF
       <action type="RUN_COMMAND"><repeat>false</repeat><command>$B/mission-control</command><on>begin</on></action>
     </gesture>
     <gesture type="PINCH" fingers="4" direction="IN">
-      <action type="RUN_COMMAND"><repeat>false</repeat><command>$B/launchpad</command><on>begin</on></action>
+      <action type="RUN_COMMAND"><repeat>false</repeat><command>$B/gesto pinch</command><on>begin</on></action>
     </gesture>
     <gesture type="PINCH" fingers="4" direction="OUT">
-      <action type="RUN_COMMAND"><repeat>false</repeat><command>pkill -x rofi</command><on>begin</on></action>
+      <action type="RUN_COMMAND"><repeat>false</repeat><command>$B/gesto spread</command><on>begin</on></action>
     </gesture>
   </application>
 </touchégg>
@@ -511,6 +521,12 @@ X keyboard-layout /Default/XkbDisable bool false
 X keyboard-layout /Default/XkbLayout string "es,us"
 X keyboard-layout /Default/XkbVariant string ","
 X keyboard-layout /Default/XkbOptions/Group string "grp:alt_shift_toggle"
+
+log "One desktop, as a Mac starts with (Mint's four meant windows could seem to vanish to another one)"
+X xfwm4 /general/workspace_count int 1
+
+log "⌘⌥Esc (Ctrl+Alt+Esc once Toshy maps ⌘) = Force Quit, not Xfce's xkill skull cursor"
+X xfce4-keyboard-shortcuts "/commands/custom/<Primary><Alt>Escape" string xfce4-taskmanager
 
 log "Mac top-row keys: F3 = Mission Control, F4 = Launchpad"
 X xfce4-keyboard-shortcuts /commands/custom/XF86LaunchA string "$B/mission-control"
