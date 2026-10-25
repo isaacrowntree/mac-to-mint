@@ -87,7 +87,38 @@ X xfce4-panel /panels/panel-1/position string "p=6;x=0;y=0"
 X xfce4-panel /panels/panel-1/size uint 30     # already taller than macOS's bar (24); bigger text, not a bigger bar
 X xfce4-panel /panels/panel-1/icon-size uint 18
 
-log "Menu bar right side like macOS: keyboard (ES/US), Wi-Fi, volume, battery %, then 'Sat 25 Oct 3:42 PM'"
+log "Gemini (Google's assistant) as its own app - type, or tap the microphone to talk"
+G="$HOME/.local/share/icons/hicolor/512x512/apps"; mkdir -p "$G"
+curl -fsSL -o "$G/gemini.png" https://www.gstatic.com/lamda/images/gemini_sparkle_4g_512_lt_f94943af3be039176192d.png \
+  || echo "   (icon download failed; the menu entry uses a generic icon)"
+gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
+cat > "$A/gemini.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Gemini
+Comment=Ask Google's AI assistant
+Comment[es]=Pregúntele al asistente de Google
+Exec=google-chrome --app=https://gemini.google.com/app
+Icon=gemini
+Categories=Utility;
+StartupWMClass=gemini.google.com__app
+EOF
+cat > "$A/spotlight.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Search
+Name[es]=Buscar
+Exec=$B/spotlight
+Icon=system-search-symbolic
+NoDisplay=true
+EOF
+
+log "Menu bar right side like macOS Sierra: ES/US, Wi-Fi, volume, battery %, 'Sat 25 Oct 3:42 PM', Search, Gemini (where Siri was)"
+# Search (magnifier, opens Spotlight) and Gemini buttons at the far right, as Spotlight and Siri were on her Mac
+for f in "spotlight:$B/spotlight" "gemini:gemini.google.com"; do
+  grep -qs "^Exec=.*${f#*:}" "$HOME"/.config/xfce4/panel/launcher-*/*.desktop \
+    || { xfce4-panel --add=launcher "$A/${f%%:*}.desktop"; sleep 1; }
+done
 # Keyboard indicator: add if missing, show text instead of a flag. Languages button: removed (Settings > Languages).
 [ -n "$(plugins xkb)" ] || xfce4-panel --add=xkb
 for p in $(plugins xkb); do X xfce4-panel "$p/display-type" uint 1; X xfce4-panel "$p/display-name" uint 0; done
@@ -108,12 +139,14 @@ for id in $ids; do
     xfconf-query -c xfce4-panel -p "/plugins/plugin-$id" -r -R; rm -rf "$HOME/.config/xfce4/panel/launcher-$id"
     continue
   fi
+  if [ "$t" = launcher ] && grep -qs "^Exec=$B/spotlight" "$HOME/.config/xfce4/panel/launcher-$id"/*.desktop; then t=search; fi
+  if [ "$t" = launcher ] && grep -qs "gemini.google.com" "$HOME/.config/xfce4/panel/launcher-$id"/*.desktop; then t=gemini; fi
   case "$t" in
-    xkb|systray|pulseaudio|power-manager-plugin|notification-plugin|clock) bytype[$t]+="$id ";;
+    xkb|systray|pulseaudio|power-manager-plugin|notification-plugin|clock|search|gemini) bytype[$t]+="$id ";;
     *) keep+=("$id");;
   esac
 done
-for t in xkb systray pulseaudio power-manager-plugin notification-plugin clock; do keep+=(${bytype[$t]:-}); done
+for t in xkb systray pulseaudio power-manager-plugin notification-plugin clock search gemini; do keep+=(${bytype[$t]:-}); done
 if [ ${#keep[@]} -gt 0 ]; then
   args=(); for id in "${keep[@]}"; do args+=(-t int -s "$id"); done
   xfconf-query -c xfce4-panel -p /panels/panel-1/plugin-ids --force-array "${args[@]}" || echo "   (could not reorder the panel)"
@@ -266,23 +299,6 @@ chmod +x "$B/aviso-bateria"
 printf '[Desktop Entry]\nType=Application\nName=Low battery warning\nExec=%s\nNoDisplay=true\n' "$B/aviso-bateria" \
   > "$HOME/.config/autostart/aviso-bateria.desktop"
 pgrep -f "$B/aviso-bateria" >/dev/null || (setsid "$B/aviso-bateria" >/dev/null 2>&1 &)
-
-log "Gemini (Google's assistant) as its own app in the menu - type or tap the microphone to talk"
-G="$HOME/.local/share/icons/hicolor/512x512/apps"; mkdir -p "$G"
-curl -fsSL -o "$G/gemini.png" https://www.gstatic.com/lamda/images/gemini_sparkle_4g_512_lt_f94943af3be039176192d.png \
-  || echo "   (icon download failed; the menu entry uses a generic icon)"
-gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
-cat > "$A/gemini.desktop" <<'EOF'
-[Desktop Entry]
-Type=Application
-Name=Gemini
-Comment=Ask Google's AI assistant
-Comment[es]=Pregúntele al asistente de Google
-Exec=google-chrome --app=https://gemini.google.com/app
-Icon=gemini
-Categories=Utility;
-StartupWMClass=gemini.google.com__app
-EOF
 
 log "How-to note on the desktop"
 cat > "$DESK/Change language - Cambiar idioma.txt" <<'EOF'

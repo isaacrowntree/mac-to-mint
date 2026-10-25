@@ -79,7 +79,10 @@ Keep a second copy of `organizado/` + `convertidos/` before deleting the raw bac
   (made on the helper Mac from `/Library/User Pictures`, never committed).
 - **Trackpad:** natural scrolling, tap to click, two-finger click = right click.
 - **Battery:** dims on battery, lid = sleep, sleeps at 5 %, "Low Battery" warnings at 20 % and 10 %, TLP.
-- **Gemini:** Google's assistant as its own app window in the menu (Chrome `--app`); type or use the microphone.
+- **Gemini:** Google's assistant as its own app window (Chrome `--app`), with a button at the far right of the menu
+  bar where Siri was on macOS 10.12, next to a Search (Spotlight) button; type or use the microphone. There's no
+  Gemini desktop app for Linux. Chrome's built-in "Gemini in Chrome" and its dictation into web text boxes
+  ("Talk to type", Chrome 156) are rolling out by country; Linux availability is unclear, so check Chrome itself.
   The Apple logo and Gemini icon are downloaded at run time (WhiteSur source, gstatic), not stored here.
 
 ## Hardware notes (MacBookAir6,1, 2013) - most apply to 2013-2015 MacBooks
