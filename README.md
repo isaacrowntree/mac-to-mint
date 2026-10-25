@@ -1,7 +1,7 @@
 # mintosh
 
 **Mint + Macintosh: an open-source macOS skin for Linux Mint Xfce, plus a kit for moving an old Mac to it
-without losing anything.** (Formerly `mac-to-mint`.)
+without losing anything.**
 
 Old Macs that Apple no longer updates still make good computers. These scripts put Linux Mint Xfce on one and
 make it look and work like macOS, so whoever used the Mac doesn't have to relearn it:
