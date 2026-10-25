@@ -39,6 +39,6 @@ UID_=$(id -u "$U"); mkdir -p /run/user/$UID_ && chown "$U": /run/user/$UID_
 runuser -u "$U" -- env DISPLAY=:0 XDG_RUNTIME_DIR=/run/user/$UID_ XDG_SESSION_TYPE=x11 XDG_CURRENT_DESKTOP=XFCE \
   setsid dbus-run-session startxfce4 >/tmp/mintosh-session.log 2>&1 < /dev/null &
 pkill -x x11vnc 2>/dev/null || true
-setsid x11vnc -display :0 -forever -shared -nopw -quiet -auth guess >/var/log/mintosh-vnc.log 2>&1 < /dev/null &
+setsid x11vnc -display :0 -forever -shared -nopw -quiet >/var/log/mintosh-vnc.log 2>&1 < /dev/null &
 sleep 8
 echo "Desktop up on :0 for $U; VNC on port 5900"

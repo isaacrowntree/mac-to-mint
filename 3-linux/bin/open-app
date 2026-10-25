@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Launchpad and Spotlight start apps through this. It starts only what an app's .desktop file says to run, so pressing
+# Return on a search that found no app does nothing (rofi would otherwise run the typed words as a command).
+p=$(basename -- "${1:-}")
+[ -n "$p" ] || exit 0
+case "$p" in rofi-sensible-terminal|x-terminal-emulator) exec "$@" ;; esac   # an app that runs in a terminal
+for d in "$HOME/.local/share/applications" /usr/local/share/applications /usr/share/applications \
+         /var/lib/flatpak/exports/share/applications "$HOME/.local/share/flatpak/exports/share/applications"; do
+  ls "$d"/*.desktop >/dev/null 2>&1 || continue
+  # the program an Exec= line runs (its first word, without quotes or folder), compared as plain text
+  awk -v p="$p" -F= '$1 == "Exec" { split($2, w, " "); c = w[1]; gsub(/"/, "", c); sub(/.*\//, "", c)
+                                     if (c == p) { found = 1; exit } } END { exit !found }' "$d"/*.desktop \
+    && exec "$@"
+done
+exit 0

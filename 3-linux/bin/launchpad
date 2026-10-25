@@ -1,22 +1,53 @@
 #!/usr/bin/env bash
-# Launchpad-style grid of all apps; F4 again or Esc closes it
+# Launchpad-style grid of all apps, over the blurred wallpaper. F4 again, Esc, a pinch, or a click outside the apps
+# closes it.
 pkill -x rofi && exit 0
 case "${LANG:-}" in es*) ph="Buscar";; *) ph="Search";; esac
-# Blurred wallpaper at exactly the screen size, made once (scaling a bigger image left a strip uncovered)
-BG="$HOME/.cache/launchpad-bg.jpg"
+size=$(xrandr 2>/dev/null | awk '/\*/{print $1; exit}'); size=${size:-1366x768}
+sw=${size%x*}; sh=${size#*x}
+# The apps sit in a centred box; everything around it is a full-screen picture of the same blurred wallpaper, so a
+# click there is a click outside rofi, which closes it (as a click on empty space closes Launchpad)
+ww=$((sw * 86 / 100)); wh=$((sh * 88 / 100)); wx=$(((sw - ww) / 2)); wy=$(((sh - wh) / 2))
+BG="$HOME/.cache/launchpad-bg-$size.jpg"; CUT="$HOME/.cache/launchpad-bg-$size-box.jpg"
 if [ ! -s "$BG" ] && command -v convert >/dev/null; then
-  size=$(xrandr 2>/dev/null | awk '/\*/{print $1; exit}'); size=${size:-1366x768}
-  # the current wallpaper (appearance clears this cache when light/dark switches the wallpaper set)
+  # the current wallpaper (appearance clears these when light/dark switches the wallpaper set)
   src=$(xfconf-query -c xfce4-desktop -l -v 2>/dev/null | awk '/workspace0\/last-image/{print $2; exit}')
   [ -f "$src" ] || src=/usr/share/backgrounds/macos/login-blur.jpg
-  convert "$src" -resize "$size^" -gravity center -extent "$size" -blur 0x20 "$BG" 2>/dev/null
+  dim=15; [ "$(cat "$HOME/.config/mintosh/appearance" 2>/dev/null)" = dark ] && dim=35
+  convert "$src" -resize "$size^" -gravity center -extent "$size" -blur 0x20 -fill black -colorize "$dim%" "$BG" 2>/dev/null
+  convert "$BG" -crop "${ww}x${wh}+${wx}+${wy}" +repage "$CUT" 2>/dev/null
+fi
+bgpid=
+if [ -s "$BG" ]; then
+  python3 - "$BG" <<'EOF' &
+import sys
+import gi
+gi.require_version("Gtk", "3.0")
+from gi.repository import Gtk
+w = Gtk.Window(title="Launchpad")
+w.set_decorated(False); w.set_skip_taskbar_hint(True); w.set_skip_pager_hint(True); w.set_keep_above(True)
+w.add(Gtk.Image.new_from_file(sys.argv[1]))
+w.connect("destroy", Gtk.main_quit)
+w.fullscreen(); w.show_all(); Gtk.main()
+EOF
+  bgpid=$!
 fi
 # (rofi refuses a background-image in -theme-str next to another rule, so it goes in a small theme of its own)
 T="$HOME/.cache/launchpad.rasi"
-{ echo "@import \"$HOME/.local/share/rofi/themes/launchpad.rasi\""; [ -s "$BG" ] && echo "window { background-image: url(\"$BG\", width); }"; } > "$T"
-# Apps only, like Launchpad: settings panels and system tools (Terminal...) stay in System Settings / Spotlight
-# One click opens an app, as on a Mac (rofi's default is click to select, double-click to open)
-exec rofi -show drun -show-icons -drun-use-desktop-cache -drun-display-format '{name}' -theme "$T" \
-  -me-select-entry '' -me-accept-entry MousePrimary \
+{ echo "@import \"$HOME/.local/share/rofi/themes/launchpad.rasi\""
+  echo "window { width: ${ww}px; height: ${wh}px; }"
+  [ -s "$CUT" ] && echo "window { background-image: url(\"$CUT\", none); }"; } > "$T"
+# Apps only, like Launchpad: settings panels and system tools stay in System Settings / Spotlight.
+# One click opens an app, as on a Mac (rofi's default is click to select, double-click to open); Return on a search
+# with no app found does nothing (open-app), rather than trying to run what was typed and showing an error.
+# F4 is also a cancel key: while rofi holds the keyboard, the F4 shortcut itself can't fire.
+rofi -show drun -show-icons -drun-use-desktop-cache -drun-display-format '{name}' -theme "$T" \
+  -icon-theme "$(xfconf-query -c xsettings -p /Net/IconThemeName 2>/dev/null || echo hicolor)" \
+  -me-select-entry '' -me-accept-entry MousePrimary -click-to-exit \
+  -drun-match-fields name,generic,keywords -sort -sorting-method fzf \
+  -run-command "$HOME/.local/bin/open-app {cmd}" \
+  -kb-cancel "Escape,Control+g,Control+bracketleft,XF86LaunchB" \
   -drun-categories Office,Network,Graphics,AudioVideo,Audio,Video,Game,Education,Utility \
   -theme-str "entry { placeholder: \"$ph\"; }"
+[ -n "$bgpid" ] && kill "$bgpid" 2>/dev/null
+exit 0

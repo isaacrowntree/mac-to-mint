@@ -37,7 +37,13 @@ else
 fi
 accent="#0a84ff"
 
-# Theme, icons, window borders; apps that follow the freedesktop colour scheme (Chrome, GTK 4, LibreOffice)
+# Theme, icons, window borders; apps that follow the freedesktop colour scheme (Chrome, GTK 4, LibreOffice).
+# Xfce only reloads a theme when its name changes, so a forced run (script 3, just after installing the themes) sets
+# the default ones for a moment first - otherwise a name set before the theme existed keeps the plain look.
+if [ -n "${FORCE:-}" ]; then
+  X xsettings /Net/ThemeName string Adwaita; X xsettings /Net/IconThemeName string hicolor
+  X xfwm4 /general/theme string Default; sleep 1
+fi
 X xsettings /Net/ThemeName string "MacTahoe-$M"
 X xsettings /Net/IconThemeName string "MacTahoe-$m"
 X xfwm4 /general/theme string "MacTahoe-$M"
@@ -127,19 +133,20 @@ element-text { text-color: inherit; vertical-align: 0.5; highlight: bold; }
 EOF
 cat > "$R/launchpad.rasi" <<EOF
 * { font: "Inter 12"; background-color: transparent; text-color: #ffffff; }
-/* Whole screen; Esc, F4 or a pinch closes it. Background: the blurred wallpaper, dimmed, as on macOS */
-window { fullscreen: true; background-color: #2c2c2e; }
-mainbox { children: [ inputbar, listview ]; spacing: 36px; padding: 6% 9%; background-color: $([ $m = dark ] && echo '#00000066' || echo '#00000033'); }
-inputbar { children: [ entry ]; margin: 0 38%; padding: 7px 14px; border-radius: 12px; background-color: #ffffff2e;
+/* A centred box over a full-screen picture of the blurred wallpaper (bin/launchpad sets its size and its slice of
+   the picture, so the two line up); a click outside the box closes it, as on macOS */
+window { fullscreen: false; location: center; anchor: center; border: 0; background-color: #2c2c2e; }
+mainbox { children: [ inputbar, listview ]; spacing: 34px; padding: 22px 2%; }
+inputbar { children: [ entry ]; margin: 0 37%; padding: 7px 14px; border-radius: 12px; background-color: #ffffff2e;
            border: 1px; border-color: #ffffff40; }
-entry { placeholder-color: #ffffffb3; horizontal-align: 0.5; }
+entry { placeholder-color: #ffffffb3; horizontal-align: 0.5; expand: true; }
 listview { columns: 7; lines: 4; flow: horizontal; fixed-columns: true; spacing: 20px; scrollbar: false; }
 element { orientation: vertical; padding: 10px 6px; spacing: 8px; border-radius: 18px; }
 element selected.normal { background-color: #ffffff33; }
 element-icon { size: 64px; horizontal-align: 0.5; }
 element-text { horizontal-align: 0.5; text-color: inherit; }
 EOF
-rm -f "$HOME/.cache/launchpad-bg.jpg"   # remade from the new wallpaper on next open
+rm -f "$HOME"/.cache/launchpad-bg*.jpg   # remade from the new wallpaper on next open
 N="$HOME/.local/share/themes/mintosh-$m/xfce-notify-4.0"; mkdir -p "$N"
 cat > "$N/gtk.css" <<EOF
 #XfceNotifyWindow { background-color: $glass; border: 1px solid $edge; border-radius: 22px; padding: 12px 14px; }
@@ -159,4 +166,6 @@ if [ -n "$first" ]; then
     case "$cur" in "$W"/*) ;; *) X xfce4-desktop "$p" string "$first" ;; esac
   done
 fi
+# The menu bar reads its colours (gtk.css) and the Apple logo only when it starts
+pgrep -u "$(id -u)" -x xfce4-panel >/dev/null && xfce4-panel -r
 echo "Appearance: $choice ($m)"

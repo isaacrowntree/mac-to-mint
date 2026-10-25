@@ -16,9 +16,12 @@ USER = os.environ.get("TEST_USER", "alex")
 ENV = dict(os.environ, DISPLAY=":0")
 
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
 def sh(cmd, user=True, check=False):
-    full = ["runuser", "-u", USER, "--", "env", "DISPLAY=:0", f"XDG_RUNTIME_DIR=/run/user/{uid()}",
-            "bash", "-c", cmd] if user else ["bash", "-c", cmd]
+    # as the user, inside their session (D-Bus too: xfconf and the accessibility tree need it)
+    full = ["bash", f"{HERE}/as-user.sh", cmd] if user else ["bash", "-c", cmd]
     r = subprocess.run(full, capture_output=True, text=True, env=ENV)
     return r.stdout.strip()
 
@@ -100,9 +103,59 @@ def pinch(n, inward=True, steps=24):
     time.sleep(1.2)
 
 
+# ---------- virtual mouse (absolute, like a VM's USB tablet) to click on things wherever they are ----------
+SW, SH = 1366, 768
+ptr = UInput({e.EV_KEY: [e.BTN_LEFT, e.BTN_RIGHT],
+              e.EV_ABS: [(e.ABS_X, AbsInfo(0, 0, 32767, 0, 0, 0)), (e.ABS_Y, AbsInfo(0, 0, 32767, 0, 0, 0))]},
+             name="mintosh test mouse", vendor=0x0627, product=0x0001, bustype=e.BUS_USB)
+
+
+def point(x, y):
+    ptr.write(e.EV_ABS, e.ABS_X, int(x * 32767 / (SW - 1))); ptr.write(e.EV_ABS, e.ABS_Y, int(y * 32767 / (SH - 1)))
+    ptr.syn(); time.sleep(0.02)
+
+
+def button(down):
+    ptr.write(e.EV_KEY, e.BTN_LEFT, 1 if down else 0); ptr.syn(); time.sleep(0.05)
+
+
+def click(x, y):
+    point(x, y); time.sleep(0.15); button(True); button(False); time.sleep(0.8)
+
+
+def drag(x0, y0, x1, y1, steps=30):
+    point(x0, y0); time.sleep(0.15); button(True)
+    for s in range(1, steps + 1):
+        point(x0 + (x1 - x0) * s / steps, y0 + (y1 - y0) * s / steps); time.sleep(0.02)
+    time.sleep(0.3); button(False); time.sleep(1)
+
+
+def ui(window):
+    """Named buttons, labels and images in a window, from the accessibility tree: {name: (cx, cy)}."""
+    import json
+    here = os.path.dirname(os.path.abspath(__file__))
+    try:
+        items = json.loads(sh(f"python3 -I {here}/ui-find.py '{window}'") or "[]")
+    except ValueError:
+        return {}
+    return {i["name"]: (i["box"][0] + i["box"][2] // 2, i["box"][1] + i["box"][3] // 2) for i in items}
+
+
+def on_desktop(title):
+    """Which desktop a window is on (wmctrl -l column 2), or None."""
+    for line in sh("wmctrl -l").splitlines():
+        parts = line.split(None, 3)
+        if len(parts) == 4 and title in parts[3]:
+            return parts[1]
+    return None
+
+
 # ---------- helpers ----------
 def running(name):
-    return subprocess.run(["pgrep", "-f", name], capture_output=True).returncode == 0
+    """A real process of that name (not a shell whose command line merely mentions it)."""
+    r = subprocess.run(["pgrep", "-af", name], capture_output=True, text=True)
+    return any(not l.split(None, 1)[1].startswith(("bash ", "runuser ", "env ", "timeout "))
+               for l in r.stdout.splitlines() if " " in l)
 
 
 def active():
@@ -207,8 +260,120 @@ def t_gestures():
     sh("wmctrl -k off")
 
 
+def t_launchpad():
+    def lp_open():  # from closed, so one failed step doesn't spill into the next
+        sh("pkill -x rofi"); time.sleep(0.5)
+        keys("KEY_DASHBOARD"); time.sleep(1.5)
+        return running("rofi.*drun")
+
+    def type_text(s):
+        for ch in s:
+            keys("KEY_SPACE" if ch == " " else f"KEY_{ch.upper()}", hold=0.02)
+
+    sh("pkill -f gnome-calculator; pkill -x xed"); sw, shh = SW, SH
+    lp_open(); time.sleep(1)
+    geo = sh("xdotool search --name '^Launchpad$' getwindowgeometry 2>/dev/null | awk '/Geometry/{print $2}' | tail -1")
+    check("Launchpad covers the whole screen", geo == f"{sw}x{shh}", geo)
+    bg = sh(f"identify -format '%wx%h' ~/.cache/launchpad-bg-{sw}x{shh}.jpg 2>/dev/null")
+    check("Launchpad background is the blurred wallpaper at screen size", bg == f"{sw}x{shh}", bg)
+    sh("import -window root /tmp/launchpad.png")  # for a look afterwards
+
+    # Typing filters; one click on the app opens it (not a double click)
+    type_text("calculator"); time.sleep(0.8)
+    sh("import -window root /tmp/launchpad-search.png")
+    # first cell of the grid: the box is 86% x 88% of the screen, centred; inside, 22px / 2% padding, then the
+    # search field (~33px) and 34px of space; 7 columns 20px apart
+    bw, bh = sw * 0.86, shh * 0.88
+    bx, by = (sw - bw) / 2, (shh - bh) / 2
+    cw = (bw * 0.96 - 6 * 20) / 7
+    click(bx + bw * 0.02 + cw / 2, by + 22 + 33 + 34 + 50); time.sleep(3)
+    check("one click on an app opens it", running("gnome-calculator") and not running("rofi.*drun"))
+    sh("pkill -f gnome-calculator")
+
+    lp_open(); type_text("text editor"); keys("KEY_ENTER"); time.sleep(3)
+    check("type a name + Return opens it", running("xed") and not running("rofi.*drun"))
+    sh("pkill -x xed")
+
+    lp_open(); type_text("settings manager"); keys("KEY_ENTER"); time.sleep(2)
+    check("settings panels are not in Launchpad", not running("xfce4-settings-manager"))
+    sh("import -window root /tmp/launchpad-nomatch.png")   # should show no "Failed to execute" error
+    lp_open(); keys("KEY_ESC"); time.sleep(0.8)
+    check("Esc closes it", not running("rofi.*drun"), sh("pgrep -a rofi | cut -c1-80"))
+
+    lp_open(); keys("KEY_DASHBOARD"); time.sleep(1.2)
+    check("F4 again closes it", not running("rofi.*drun"), sh("pgrep -a rofi | cut -c1-80"))
+    lp_open(); click(sw - 30, shh - 20); time.sleep(0.8)
+    check("a click on empty space closes it", not running("rofi.*drun"), sh("pgrep -a rofi | cut -c1-80"))
+    lp_open(); pinch(4, inward=False)
+    check("spreading the fingers closes it", not running("rofi.*drun"))
+    sh("pkill -x rofi")
+
+
+def t_mission_control():
+    sh("pkill -f bin/mission-control; pkill -x xed; pkill -x xfce4-terminal")
+    sh("xfconf-query -c xfwm4 -p /general/workspace_count -s 1"); time.sleep(0.5)
+    sh("setsid xed >/dev/null 2>&1 &"); time.sleep(3)
+    sh("setsid xfce4-terminal >/dev/null 2>&1 &"); time.sleep(3)
+    def title(cls):  # the visible window's title (xdotool also finds hidden helper windows)
+        for line in sh("wmctrl -lx").splitlines():
+            parts = line.split(None, 4)
+            if len(parts) == 5 and parts[2].split(".")[0] == cls:
+                return parts[4]
+        return ""
+    ed, term = title("xed"), title("xfce4-terminal")
+
+    def mc_open():
+        if not running("bin/mission-control"):
+            keys("KEY_SCALE"); time.sleep(2.5)
+        return ui("Mission Control")
+
+    u = mc_open()
+    sh("import -window root /tmp/mission-control.png")
+    check("Mission Control shows a preview of each window", bool(ed) and ed in u and term in u, ", ".join(u))
+    check("previews are labelled with the app's name", "Text Editor" in u and any(n.endswith("Terminal") for n in u))
+    check("the Spaces bar shows the desktops", "Desktop 1" in u, ", ".join(n for n in u if "Desktop" in n))
+
+    if "+" in u:
+        click(*u["+"]); time.sleep(1); u = ui("Mission Control")
+    n = sh("xfconf-query -c xfwm4 -p /general/workspace_count")
+    check("+ adds a desktop", n == "2" and "Desktop 2" in u, f"count {n}")
+
+    if ed in u and "Desktop 2" in u:
+        drag(*u[ed], *u["Desktop 2"]); time.sleep(1)
+    check("dragging a window onto a desktop moves it there", on_desktop(ed) == "1", f"on desktop {on_desktop(ed)}")
+
+    u = ui("Mission Control")
+    if "Desktop 2" in u:
+        click(*u["Desktop 2"]); time.sleep(1)
+    check("clicking a desktop goes there and closes", desktop() == "1" and not running("bin/mission-control"),
+          f"desktop {desktop()}")
+
+    u = mc_open()
+    if "✕" in u:
+        click(*u["✕"]); time.sleep(1.2)
+    n = sh("xfconf-query -c xfwm4 -p /general/workspace_count")
+    check("✕ removes the last desktop; its windows come back", n == "1" and on_desktop(ed) == "0",
+          f"count {n}, editor on {on_desktop(ed)}")
+
+    sh("xdotool search --class xed windowactivate"); time.sleep(0.8)
+    u = mc_open()
+    if term in u:
+        click(*u[term]); time.sleep(1)
+    check("clicking a preview brings that window to the front", active() == term and not running("bin/mission-control"),
+          active())
+
+    mc_open(); click(SW // 2, SH - 15)
+    check("a click on empty space closes it", not running("bin/mission-control"))
+    mc_open(); keys("KEY_ESC")
+    check("Esc closes it", not running("bin/mission-control"))
+    mc_open(); keys("KEY_SCALE"); time.sleep(1)
+    check("F3 again closes it", not running("bin/mission-control"))
+    sh("pkill -x xed; pkill -x xfce4-terminal")
+
+
 TESTS = {"spotlight": t_spotlight, "screenshot": t_screenshot, "copy": t_copy_paste, "cmdtab": t_cmd_tab,
-         "fkeys": t_f3_f4, "spaces": t_spaces_keys, "gestures": t_gestures}
+         "fkeys": t_f3_f4, "spaces": t_spaces_keys, "gestures": t_gestures, "launchpad": t_launchpad,
+         "missioncontrol": t_mission_control}
 
 if __name__ == "__main__":
     time.sleep(2)  # let libinput, Toshy and Touchegg pick up the new devices
@@ -222,4 +387,4 @@ if __name__ == "__main__":
             check(name, False, repr(ex))
     sh("xfconf-query -c xfwm4 -p /general/workspace_count -s 1")
     print(f"\n{sum(ok for _, ok in results)}/{len(results)} passed")
-    kbd.close(); tp.close()
+    kbd.close(); tp.close(); ptr.close()

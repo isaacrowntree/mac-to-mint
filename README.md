@@ -7,7 +7,10 @@ Old Macs that Apple no longer updates still make good computers. These scripts p
 make it look and work like macOS, so whoever used the Mac doesn't have to relearn it:
 
 - Apple menu, a global menu bar (the app's name and its File/Edit/View menus at the top), macOS-ordered status icons
-- Dock, Spotlight (⌘Space), Launchpad (F4) and Mission Control (three-finger swipe up)
+- macOS 26/27 "Liquid Glass" look in **light, dark or auto** (switch with `appearance dark`): see-through menu bar,
+  glass dock, glass Spotlight and notifications, real blur behind them
+- Dock, Spotlight (⌘Space), Launchpad (F4) and Mission Control with Spaces (three-finger swipe up; left/right
+  between desktops)
 - ⌘C/⌘V/⌘Q/⌘W/⌘Tab and the other Mac shortcuts, Mac trackpad gestures
 - Black boot screen with an Apple logo, a Sonoma-style login screen
 - Battery warnings, sleep on lid close, and the fixes 2013-2015 MacBooks need to run Linux reliably
@@ -25,8 +28,9 @@ which is why the menus are in Spanish; by default everything is English.
 Finder's sidebar is hidden and the login screen shows a demo account.</sub>
 
 It all runs on a 4 GB, 2013 MacBook Air: the search and launcher windows only exist while open, so nothing extra
-sits in memory. The look comes from the excellent [WhiteSur](https://github.com/vinceliuice/WhiteSur-gtk-theme)
-themes and [Toshy](https://github.com/RedBearAK/toshy); this repo wires them, and a lot of small fixes, together.
+sits in memory. The look comes from the excellent [MacTahoe](https://github.com/vinceliuice/MacTahoe-gtk-theme)
+theme, the blur from [picom](https://github.com/yshui/picom) and the shortcuts from [Toshy](https://github.com/RedBearAK/toshy);
+this repo wires them, and a lot of small fixes, together.
 
 **Just want the skin?** On any Linux Mint 22 Xfce machine (Mac or not), run scripts 3, 4 and 5 from step 4 below.
 The hardware fixes only switch on when that hardware is present.
@@ -103,15 +107,22 @@ Keep a second copy of `organized/` + `converted/` before deleting the raw backup
   Alt+Shift, shown in the top bar). Chrome as default browser, LibreOffice saving
   .docx/.xlsx/.pptx by default, MS core fonts + Carlito/Caladea, Inter (SF Pro stand-in), Epson/Canon drivers,
   automatic updates, password login (autologin off so the keyring unlocks itself).
-- **macOS look:** WhiteSur theme, `WhiteSur-light` icons (plain `WhiteSur` icons are white and vanish in a light
-  menu), cursor, Inter font, window buttons on the left, centred titles, shadows, double-click to zoom, Plank dock
-  (Finder, Launchpad, apps | Downloads, Trash), rotating macOS-style wallpapers, volume/brightness pop-ups,
-  rounded top-right notifications, only files on the desktop, Thunar renamed Finder with Finder-like settings.
-- **Menu bar:** Apple menu (Xfce's Applications Menu on a custom `.menu` file: About This Computer, System
+- **macOS look:** [MacTahoe](https://github.com/vinceliuice/MacTahoe-gtk-theme) theme, icons and cursor in light and
+  dark, Inter font (SF Pro stand-in), window buttons on the left, centred titles, rounded corners and soft shadows,
+  double-click to zoom, Plank dock on glass (Finder, Launchpad, apps | Downloads, Trash), rotating macOS-style
+  wallpapers (a light set and a dark set), glass notifications top right, only files on the desktop, Thunar renamed
+  Finder with Finder-like settings.
+- **Appearance:** `appearance light|dark|auto` (also in the app menu as "Appearance: Light/Dark/Auto") switches
+  everything that has two looks: theme, icons, window borders, menu bar text and Apple logo, dock, Spotlight,
+  Launchpad, Mission Control, notifications, wallpapers, and apps that follow the system colour scheme (Chrome,
+  LibreOffice, GTK 4). Auto is light 7:00-19:00. `APPEARANCE=dark bash 3-macos-look.sh` picks it at install.
+- **Glass:** picom replaces xfwm's compositor and blurs what is behind translucent windows (dual-Kawase on a real
+  GPU, a lighter blur without one), with rounded window corners and macOS-like shadows.
+- **Menu bar:** no bar of its own, as in macOS Tahoe: text and icons on the wallpaper with a faint shade. Apple menu (Xfce's Applications Menu on a custom `.menu` file: About This Computer, System
   Settings, App Store, Force Quit, Sleep, Restart, Shut Down, Lock Screen, Log Out, with separators), then the
   global menu (`xfce4-appmenu-plugin`: active app's name in bold + its File/Edit/View menus, out of the window;
   works for Chrome, LibreOffice and GTK apps). Right side as on macOS: keyboard layout, tray icons, Wi-Fi, volume,
-  battery %, "Sun 25 Oct 3:42 PM", Search, Gemini. Regular-weight text (WhiteSur makes it bold). Mint's Firefox/Terminal/Files
+  battery %, "Sun 25 Oct 3:42 PM", Search, Gemini. Regular-weight text. Mint's Firefox/Terminal/Files
   launchers, show-desktop, window buttons and Languages button are removed.
 - **Spotlight (⌘Space) and Launchpad (F4, dock):** rofi, not Ulauncher: it starts on demand and exits, so it uses no
   memory while closed (Ulauncher stays resident, ~100 MB+, too much for 4 GB). Spotlight: Sonoma-style bar, results
@@ -121,9 +132,13 @@ Keep a second copy of `organized/` + `converted/` before deleting the raw backup
   (Shift/Esc shows it); a Sonoma-style login screen (lightdm-gtk-greeter): big date and time at the top, a round
   account picture, the name and a translucent password field at the bottom of the blurred wallpaper. The picture
   is one of macOS's own (`AVATAR=`, from `/Library/User Pictures` on the helper Mac), never committed.
-- **Trackpad:** natural scrolling, tap to click, two-finger click = right click; three fingers up/down = Mission
-  Control (live window previews, F3 too); thumb + three fingers pinch = Launchpad, spread = show desktop (Touchegg).
-  One desktop, as a Mac starts with.
+- **Mission Control and Spaces:** three fingers up (or F3, Ctrl+↑) shows the Spaces bar across the top and live
+  previews of the windows. Click a desktop to go there, + to add one, ✕ to remove the last; drag a window onto a
+  desktop to move it; click empty space, Esc or swipe again to close. A short-lived Python/GTK program
+  (`bin/mission-control`), so it uses no memory while closed. Three fingers left/right (or Ctrl+←/→) moves between
+  desktops; one desktop to start with, as on a Mac.
+- **Trackpad:** natural scrolling, tap to click, two-finger click = right click; thumb + three fingers pinch =
+  Launchpad, spread = show desktop (Touchegg).
 - **Battery:** dims on battery, lid = sleep, sleeps at 5 %, "Low Battery" warnings at 20 % and 10 % (UPower's
   figure, as in the menu bar; the kernel's `capacity` reads lower on this Mac), TLP.
 - **Chrome language:** at each login Chrome's website languages are set from the system language (e.g. es-CO
@@ -132,7 +147,7 @@ Keep a second copy of `organized/` + `converted/` before deleting the raw backup
   bar where Siri was on macOS 10.12 (sparkle on a white circle so it shows on any wallpaper). There's no
   Gemini desktop app for Linux. Chrome's built-in "Gemini in Chrome" and its dictation into web text boxes
   ("Talk to type", Chrome 156) are rolling out by country; Linux availability is unclear, so check Chrome itself.
-  The Apple logo and Gemini icon are downloaded at run time (WhiteSur source, gstatic), not stored here.
+  The Apple logo and Gemini icon are downloaded at run time (MacTahoe source, gstatic), not stored here.
 
 ## Hardware notes (MacBookAir6,1, 2013) - most apply to 2013-2015 MacBooks
 | Problem | Fix (in `1-system-setup.sh`, gated on the hardware) |
@@ -154,8 +169,7 @@ power saving off) on Apple hardware.
 - Run scripts that change the desktop (panel, dock) inside the session, not over SSH: an SSH-started panel or
   dock loses the session environment (no transparency, plank refuses to start). Logging out and in fixes it.
 - `pkill -f "<pattern>"` inside `ssh host '...<pattern>...'` kills its own shell. Kill by PID or exact name.
-- WhiteSur's installer needs `TERM` set (it calls `setterm`) and writes the Whisker menu opacity to a file
-  Xfce 4.18+ ignores; set `menu-opacity` < 100 through xfconf or the menu gets black corners.
+- The WhiteSur/MacTahoe installers need `TERM` set (they call `setterm`).
 - Don't restart the panel (`xfce4-panel -r`) more than needed: it can take nm-applet, blueman and the update icon
   down with it. Relaunch them from their `/etc/xdg/autostart` entries, or log out and in.
 - Files the panel watches (custom menus) must be replaced atomically, or it shows "Could not load the applications
@@ -165,10 +179,24 @@ power saving off) on Apple hardware.
 - Preview the login screen without logging out: `lightdm --test-mode` from the desktop opens it in a Xephyr
   window. Put a wrapper named `Xephyr` that adds `-screen 1366x768` first in `PATH` to see it at the real size.
 - lightdm-gtk-greeter: style the password field as `#login_window entry` (its builder ids aren't all widget names),
-  and build its theme on GTK's own Adwaita, not WhiteSur, whose entry rules win and leave the dots unreadable.
+  and build its theme on GTK's own Adwaita, not the macOS theme, whose entry rules win and leave the dots unreadable.
 - lightdm-gtk-greeter left-aligns the user name inside its (fixed-width) box. On a one-person machine script 4 draws
   the name centred on the background and hides the box's text; `LOGIN_NAME=` overrides the drawn name.
 - Two copies of `appmenu-gtk-module` (xsettings `/Gtk/Modules` plus `GTK_MODULES`) make Chrome segfault on start.
+
+## Testing on a Mac (OrbStack)
+`test/` builds a Linux Mint 22.3 Xfce machine in [OrbStack](https://orbstack.dev) (amd64 under Rosetta) and runs the
+skin on a virtual 1366x768 screen, with virtual Apple keyboard and trackpad devices for the shortcuts and gestures:
+```
+bash test/orb-machine.sh                                              # once: the machine + Mint's Xfce desktop
+orb -m mintosh-test -u root bash test/desktop.sh                      # desktop on :0, VNC on mintosh-test.orb.local:5900
+orb -m mintosh-test -u root bash -c 'cd 3-linux && bash 1-system-setup.sh'
+orb -m mintosh-test -u root bash test/as-user.sh 'bash 3-linux/3-macos-look.sh'
+orb -m mintosh-test -u root bash -c 'cd 3-linux && SUDO_USER=alex bash 4-macos-system.sh'
+orb -m mintosh-test -u root bash test/as-user.sh 'bash 3-linux/5-mac-shortcuts.sh'
+orb -m mintosh-test -u root python3 -I test/input-test.py             # ⌘ shortcuts, F-keys, Spaces, gestures
+```
+(Run these from the repo folder; OrbStack machines see the Mac's files at the same path.)
 
 ## Undoing things
 - Login screen: `sudo rm /etc/lightdm/lightdm.conf.d/95-macos-greeter.conf` (back to Mint's slick-greeter).
@@ -181,7 +209,7 @@ power saving off) on Apple hardware.
 
 ## Credits
 Downloaded or installed at run time, not redistributed here:
-[WhiteSur GTK theme, icons, cursors and wallpapers](https://github.com/vinceliuice) (vinceliuice),
+[MacTahoe theme, icons and cursors, and WhiteSur wallpapers](https://github.com/vinceliuice) (vinceliuice), [picom](https://github.com/yshui/picom),
 [Toshy](https://github.com/RedBearAK/toshy), [rofi](https://github.com/davatorium/rofi),
 [Touchégg](https://github.com/JoseExposito/touchegg), [vala-panel-appmenu](https://github.com/rilian-la-te/vala-panel-appmenu),
 [Plank](https://launchpad.net/plank), [lightdm-gtk-greeter](https://github.com/Xubuntu/lightdm-gtk-greeter),
@@ -192,5 +220,5 @@ and Linux Mint and Xfce themselves. Each keeps its own licence.
 The scripts and docs in this repo are MIT-licensed (see `LICENSE`). Apple, the Apple logo, macOS, Mac, MacBook,
 Finder, Spotlight, Launchpad and Mission Control are trademarks of Apple Inc.; Google, Chrome and Gemini are
 trademarks of Google LLC. This project is not affiliated with or endorsed by Apple or Google. The Apple logo is
-taken from the WhiteSur sources at run time and the macOS account picture from the helper Mac's own files; neither
+taken from the MacTahoe sources at run time and the macOS account picture from the helper Mac's own files; neither
 is stored in this repo. Use it on hardware you own.

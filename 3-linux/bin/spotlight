@@ -2,7 +2,10 @@
 # Spotlight-style search (apps first, then files); pressing the shortcut again closes it
 pkill -x rofi && exit 0
 case "${LANG:-}" in es*) ph="Búsqueda de Spotlight";; *) ph="Spotlight Search";; esac
-# Match app names only (not their commands: "libre" found the Menu Editor, menulibre), best matches first
+# Match app names only (not their commands: "libre" found the Menu Editor, menulibre), best matches first.
+# Apps start through open-app, so Return on a search that found nothing doesn't try to run the typed words.
 exec rofi -show combi -combi-modes "drun,files:$HOME/.local/bin/spotlight-files" -combi-hide-mode-prefix \
   -drun-match-fields name,generic,keywords -sort -sorting-method fzf -me-select-entry '' -me-accept-entry MousePrimary \
-  -show-icons -drun-display-format '{name}' -theme spotlight -theme-str "entry { placeholder: \"$ph\"; }"
+  -run-command "$HOME/.local/bin/open-app {cmd}" -show-icons -drun-display-format '{name}' \
+  -icon-theme "$(xfconf-query -c xsettings -p /Net/IconThemeName 2>/dev/null || echo hicolor)" \
+  -theme spotlight -theme-str "entry { placeholder: \"$ph\"; }"

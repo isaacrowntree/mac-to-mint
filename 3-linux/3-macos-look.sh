@@ -14,6 +14,16 @@ X() {
   if xfconf-query -c "$1" -p "$2" >/dev/null 2>&1; then xfconf-query -c "$1" -p "$2" -s "$4"
   else xfconf-query -c "$1" -p "$2" --create -t "$3" -s "$4"; fi || echo "   (could not set $1 $2)"
 }
+# Restart the panel; if it doesn't (a dialog left open keeps it busy), stop it and start it again
+panel_restart() {
+  local old; old=$(pgrep -u "$(id -u)" -x xfce4-panel)
+  xfce4-panel -r; sleep 5
+  if [ -n "$old" ] && [ "$(pgrep -u "$(id -u)" -x xfce4-panel)" = "$old" ]; then
+    kill "$old"; sleep 3; kill -0 "$old" 2>/dev/null && { kill -9 "$old"; sleep 3; }   # the session starts it again
+    pgrep -u "$(id -u)" -x xfce4-panel >/dev/null || (setsid xfce4-panel >/dev/null 2>&1 < /dev/null &)
+    sleep 4
+  fi
+}
 plugins() { xfconf-query -c xfce4-panel -l -v | awk -v t="$1" '$2==t{print $1}'; }   # /plugins/plugin-N of a type
 HERE="$(cd "$(dirname "$0")" && pwd)"
 T="$HOME/.cache/mintosh-src"; mkdir -p "$T"
@@ -28,6 +38,7 @@ done
 
 log "Install them, light and dark (into your home folder, no sudo)"
 if [ -d "$HOME/.themes/MacTahoe-Light" ] && [ -d "$HOME/.themes/MacTahoe-Dark" ]; then echo "   already installed"; else
+  export USER="${USER:-$(id -un)}"   # its installer finds your home folder from this when there's no login (cron, ssh -T)
   (cd "$T/MacTahoe-gtk-theme" && ./install.sh -c light -c dark) || echo "   theme install failed - check its README flags"
   (cd "$T/MacTahoe-icon-theme" && ./install.sh)                   || echo "   icon theme install failed"
   (cd "$T/MacTahoe-icon-theme/cursors" && ./install.sh)           || echo "   cursor install failed"
@@ -60,14 +71,15 @@ vsync = true;
 blur: { $blur };
 blur-background = true;
 blur-background-frame = false;
-blur-background-exclude = [ "window_type = 'desktop'", "_GTK_FRAME_EXTENTS@", "class_g = 'Xfdesktop'" ];
+blur-background-exclude = [ "window_type = 'desktop'", "_GTK_FRAME_EXTENTS@:c", "class_g = 'Xfdesktop'",
+                            "class_g = 'Plank'" ];   # its window is much taller than the dock (room to bounce)
 corner-radius = 12;
 rounded-corners-exclude = [ "window_type = 'dock'", "window_type = 'desktop'", "class_g = 'Plank'",
-                            "class_g = 'Xfce4-panel'", "class_g = 'Rofi'", "_GTK_FRAME_EXTENTS@" ];
+                            "class_g = 'Xfce4-panel'", "class_g = 'Rofi'", "_GTK_FRAME_EXTENTS@:c" ];
 shadow = true;
 shadow-radius = 22; shadow-opacity = 0.32; shadow-offset-x = -20; shadow-offset-y = -14;
 shadow-exclude = [ "window_type = 'dock'", "window_type = 'desktop'", "class_g = 'Plank'", "class_g = 'Xfce4-panel'",
-                   "class_g = 'Rofi'", "_GTK_FRAME_EXTENTS@", "window_type = 'notification'" ];
+                   "class_g = 'Rofi'", "_GTK_FRAME_EXTENTS@:c", "window_type = 'notification'" ];
 fading = true; fade-delta = 6; fade-in-step = 0.06; fade-out-step = 0.06;
 EOF
   printf '[Desktop Entry]\nType=Application\nName=Glass effects (picom)\nExec=picom\nNoDisplay=true\n' \
@@ -136,6 +148,13 @@ EOF
 
 log "Launchpad: F4, the dock icon or a pinch shows all apps full screen (rofi: no memory used while closed)"
 printf '[Desktop Entry]\nType=Application\nName=Launchpad\nExec=%s\nIcon=view-app-grid\nNoDisplay=true\nStartupNotify=false\n' "$B/launchpad" > "$A/launchpad.desktop"
+# Only real apps, like Launchpad: helpers that run in the background or by themselves (the glass effect, the dock),
+# Xfce's run boxes and terminal-only programs stay out (a hidden copy in your apps folder; delete it to bring one back)
+for f in picom plank xfce4-appfinder xfce4-run activity-log-manager thunar-bulk-rename vim nvim x11vnc compton; do
+  src=/usr/share/applications/$f.desktop
+  [ -f "$src" ] && sed -e '/^NoDisplay=/d' -e '/^\[Desktop Entry\]/a NoDisplay=true' "$src" > "$A/$f.desktop"
+done
+rm -f "$HOME/.cache/rofi-drun-desktop.cache"   # Launchpad and Spotlight keep a list of apps; make it again
 
 log "macOS-style wallpapers (WhiteSur recreations): a light set and a dark set, rotating hourly"
 for m in light dark; do
@@ -156,6 +175,20 @@ X xfce4-desktop /desktop-icons/file-icons/show-home bool false
 X xfce4-desktop /desktop-icons/file-icons/show-filesystem bool false
 X xfce4-desktop /desktop-icons/file-icons/show-trash bool false
 X xfce4-desktop /desktop-icons/file-icons/show-removable bool true
+
+log "Only the menu bar: remove Mint's other panels (Mint 22.3 adds a launcher bar at the bottom; the dock replaces it)"
+others=$(xfconf-query -c xfce4-panel -p /panels 2>/dev/null | grep -E '^[0-9]+$' | grep -vx 1)
+if [ -n "$others" ]; then
+  for n in $others; do
+    for id in $(xfconf-query -c xfce4-panel -p "/panels/panel-$n/plugin-ids" 2>/dev/null | grep -E '^[0-9]+$'); do
+      xfconf-query -c xfce4-panel -p "/plugins/plugin-$id" -r -R; rm -rf "$HOME/.config/xfce4/panel/launcher-$id"
+    done
+    xfconf-query -c xfce4-panel -p "/panels/panel-$n" -r -R
+  done
+  xfconf-query -c xfce4-panel -p /panels --force-array -t int -s 1
+fi
+# restart it now (also on a re-run): while a second panel is still showing, "xfce4-panel --add" asks which panel
+panel_restart
 
 log "Top panel as a menu bar"
 X xfce4-panel /panels/panel-1/position string "p=6;x=0;y=0"
@@ -200,13 +233,13 @@ log "Menu bar right side like macOS Sierra: ES/US, Wi-Fi, volume, battery %, 'Sa
 # Search (magnifier, opens Spotlight) and Gemini buttons at the far right, as Spotlight and Siri were on macOS 10.12
 for f in "spotlight:$B/spotlight" "gemini:gemini.google.com"; do
   grep -qs "^Exec=.*${f#*:}" "$HOME"/.config/xfce4/panel/launcher-*/*.desktop \
-    || { xfce4-panel --add=launcher "$A/${f%%:*}.desktop"; sleep 1; }
+    || { timeout 20 xfce4-panel --add=launcher "$A/${f%%:*}.desktop"; sleep 1; }
 done
 # Left side: Apple menu, then the global menu (below)
 apple_menus() { for p in $(plugins applicationsmenu); do
   [ "$(xfconf-query -c xfce4-panel -p "$p/custom-menu-file" 2>/dev/null)" = "$APPLE_MENU" ] && echo "$p"; done; }
 if [ -z "$(apple_menus)" ]; then
-  before=$(plugins applicationsmenu); xfce4-panel --add=applicationsmenu; sleep 2
+  before=$(plugins applicationsmenu); timeout 20 xfce4-panel --add=applicationsmenu; sleep 2
   for p in $(plugins applicationsmenu); do
     echo "$before" | grep -qx "$p" || X xfce4-panel "$p/custom-menu-file" string "$APPLE_MENU"
   done
@@ -233,8 +266,8 @@ if [ -f /usr/share/xfce4/panel/plugins/appmenu.desktop ]; then
   xfconf-query -c xsettings -p /Gtk/Modules -r 2>/dev/null || true
   sed -i '/appmenu-gtk-module/d' "$HOME/.xsessionrc" 2>/dev/null || true
   if [ -z "$(plugins appmenu)" ]; then
-    xfce4-panel -r; sleep 5   # a running panel doesn't see plugins installed after it started
-    xfce4-panel --add=appmenu; sleep 2
+    panel_restart   # a running panel doesn't see plugins installed after it started
+    timeout 20 xfce4-panel --add=appmenu; sleep 2
   fi
   for p in $(plugins appmenu); do
     X xfce4-panel "$p/bold-application-name" bool true   # "Google Chrome" in bold, then Archivo, Edición...
@@ -242,7 +275,7 @@ if [ -f /usr/share/xfce4/panel/plugins/appmenu.desktop ]; then
   done
 fi
 # Keyboard indicator: add if missing, show text instead of a flag. Languages button: removed (Settings > Languages).
-[ -n "$(plugins xkb)" ] || xfce4-panel --add=xkb
+[ -n "$(plugins xkb)" ] || timeout 20 xfce4-panel --add=xkb
 for p in $(plugins xkb); do
   X xfce4-panel "$p/display-type" uint 1; X xfce4-panel "$p/display-name" uint 0
   X xfce4-panel "$p/display-scale" uint 55     # text fills the bar height at 100 %
@@ -262,8 +295,12 @@ for id in $ids; do
   t=$(xfconf-query -c xfce4-panel -p "/plugins/plugin-$id" 2>/dev/null)
   # A Mac menu bar has no app shortcuts (they're in the dock): drop Mint's Languages, Firefox, Terminal, Files
   # launchers and the show-desktop button. Also the Windows-style window buttons (the dock shows open apps), the
-  # Whisker app menu (replaced by the Apple menu + Launchpad) and the small fixed gaps between them.
+  # desktop switcher (Mission Control's Spaces bar does that), the Whisker / Applications menus (replaced by the
+  # Apple menu + Launchpad) and the small fixed gaps between them.
   if [ "$t" = showdesktop ] || [ "$t" = tasklist ] || [ "$t" = whiskermenu ] || [ "$t" = windowck-plugin ] \
+     || [ "$t" = pager ] \
+     || { [ "$t" = applicationsmenu ] \
+          && [ "$(xfconf-query -c xfce4-panel -p "/plugins/plugin-$id/custom-menu-file" 2>/dev/null)" != "$APPLE_MENU" ]; } \
      || { [ "$t" = launcher ] && grep -qs "^Exec=$B/about-this-computer" "$HOME/.config/xfce4/panel/launcher-$id"/*.desktop; } \
      || { [ "$t" = separator ] && [ "$(xfconf-query -c xfce4-panel -p "/plugins/plugin-$id/expand" 2>/dev/null)" != true ]; } \
      || { [ "$t" = launcher ] && grep -qsE "^Exec=(mintlocale|firefox|xfce4-terminal|thunar)( |$)" \
@@ -294,6 +331,7 @@ for d in "$HOME"/.config/xfce4/panel/launcher-*; do
   [[ "$live" == *" ${d##*-} "* ]] && [ "$(xfconf-query -c xfce4-panel -p "/plugins/plugin-${d##*-}" 2>/dev/null)" = launcher ] \
     || rm -rf "$d"
 done
+panel_restart   # a running panel keeps showing plugins removed from its settings until it restarts
 
 log "Dock (Plank) with the everyday apps"
 

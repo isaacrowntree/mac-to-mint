@@ -8,6 +8,7 @@ It is a short-lived process: it starts when opened and exits when closed, so it 
 Appearance follows ~/.config/mintosh/appearance ("light" or "dark").
 """
 import os
+import subprocess
 import sys
 
 import gi
@@ -16,7 +17,7 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 gi.require_version("GdkX11", "3.0")
 gi.require_version("Wnck", "3.0")
-from gi.repository import Gdk, GdkPixbuf, GdkX11, GLib, Gtk, Wnck  # noqa: E402
+from gi.repository import Gdk, GdkPixbuf, GdkX11, Gio, GLib, Gtk, Wnck  # noqa: E402
 
 LOCK = os.path.join(GLib.get_user_runtime_dir(), "mission-control.pid")
 ES = os.environ.get("LANG", "").startswith("es")
@@ -45,7 +46,6 @@ def appearance():
 
 DARK = appearance() == "dark"
 CSS = f"""
-window.mc {{ background-color: {'rgba(10,10,14,0.55)' if DARK else 'rgba(20,20,30,0.38)'}; }}
 .spaces {{ padding: 14px 0 6px 0; }}
 .space {{ background-color: rgba(255,255,255,0.16); color: #fff; border-radius: 10px; padding: 6px 18px;
           border: 1px solid rgba(255,255,255,0.28); font-weight: 600; box-shadow: none; text-shadow: none; }}
@@ -57,6 +57,35 @@ window.mc {{ background-color: {'rgba(10,10,14,0.55)' if DARK else 'rgba(20,20,3
 .thumb:hover {{ border-color: rgba(10,132,255,0.95); background-color: rgba(255,255,255,0.08); }}
 .title {{ color: #fff; font-size: 12px; font-weight: 500; text-shadow: 0 1px 2px rgba(0,0,0,0.6); }}
 """
+
+
+def wallpaper(w, h):
+    """The current desktop picture, filling the screen (Mission Control is drawn over it, as on macOS)."""
+    try:
+        out = subprocess.run(["xfconf-query", "-c", "xfce4-desktop", "-l", "-v"], capture_output=True, text=True).stdout
+        path = next(l.split(None, 1)[1] for l in out.splitlines() if "workspace0/last-image" in l)
+        pb = GdkPixbuf.Pixbuf.new_from_file(path)
+        s = max(w / pb.get_width(), h / pb.get_height())
+        pb = pb.scale_simple(int(pb.get_width() * s) + 1, int(pb.get_height() * s) + 1, GdkPixbuf.InterpType.BILINEAR)
+        return pb.new_subpixbuf((pb.get_width() - w) // 2, (pb.get_height() - h) // 2, w, h)
+    except Exception:
+        return None
+
+
+def app_name(w):
+    """The name people know an app by ("Calculator", not "gnome-calculator"), from its .desktop file."""
+    for key in filter(None, (w.get_class_instance_name(), w.get_class_group_name())):
+        k = key.lower().removesuffix(".py")
+        for group in Gio.DesktopAppInfo.search(k):
+            for desktop_id in group:
+                info = Gio.DesktopAppInfo.new(desktop_id)
+                if not info:
+                    continue
+                exe = os.path.basename((info.get_commandline() or "").split(" ")[0]).lower()
+                if k in ((info.get_startup_wm_class() or "").lower(), exe, desktop_id[:-8].lower()):
+                    return info.get_name()
+    app = w.get_application()
+    return app.get_name() if app else w.get_name()
 
 
 def snapshot(xid, w, h):
@@ -84,11 +113,8 @@ class MissionControl(Gtk.Window):
         self.set_keep_above(True)
         self.set_skip_taskbar_hint(True)
         self.set_skip_pager_hint(True)
-        self.set_type_hint(Gdk.WindowTypeHint.DIALOG)
-        visual = self.get_screen().get_rgba_visual()
-        if visual:
-            self.set_visual(visual)
         self.set_app_paintable(True)
+        self.connect("draw", self.on_draw)
         self.connect("key-press-event", self.on_key)
         self.connect("button-press-event", lambda *a: self.quit())  # empty space closes it
         self.connect("destroy", lambda *a: self.quit())
@@ -98,6 +124,7 @@ class MissionControl(Gtk.Window):
         self.drag_xid = None
         geo = self.get_screen().get_display().get_primary_monitor().get_geometry()
         self.W, self.H = geo.width, geo.height
+        self.bg = wallpaper(self.W, self.H)
 
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         self.add(root)
@@ -109,9 +136,22 @@ class MissionControl(Gtk.Window):
                                 column_spacing=28, row_spacing=22, max_children_per_line=4)
         root.pack_start(self.grid, True, True, 0)
         self.build()
+        self.set_default_size(self.W, self.H)
+        self.set_size_request(self.W, self.H)
         self.fullscreen()
         self.show_all()
         self.present()
+
+    def on_draw(self, _w, cr):
+        # the wallpaper, a little darker, with the real windows hidden behind it (only their previews show)
+        if self.bg:
+            Gdk.cairo_set_source_pixbuf(cr, self.bg, 0, 0)
+        else:
+            cr.set_source_rgb(0.2, 0.2, 0.25)
+        cr.paint()
+        cr.set_source_rgba(0, 0, 0, 0.45 if DARK else 0.25)
+        cr.paint()
+        return False
 
     # -- Spaces bar ------------------------------------------------------------------------------------------
     def build(self):
@@ -170,6 +210,9 @@ class MissionControl(Gtk.Window):
                 if w.get_window_type() == Wnck.WindowType.NORMAL and not w.is_skip_tasklist()
                 and (w.is_pinned() or w.get_workspace() == ws) and w.get_xid() != self.own_xid()]
         cols = 1 if len(wins) <= 1 else 2 if len(wins) <= 4 else 3 if len(wins) <= 9 else 4
+        # a fixed number per row, or the grid asks for one per row and the window grows taller than the screen
+        self.grid.set_min_children_per_line(cols)
+        self.grid.set_max_children_per_line(cols)
         tw = int(self.W * 0.8 / cols) - 40
         th = int((self.H - 160) / max(1, (len(wins) + cols - 1) // cols)) - 50
         tw, th = min(tw, 520), min(th, 340)
@@ -180,18 +223,20 @@ class MissionControl(Gtk.Window):
             box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
             ev = Gtk.EventBox()
             ev.get_style_context().add_class("thumb")
-            ev.add(Gtk.Image.new_from_pixbuf(pb))
-            ev.connect("button-release-event", self.on_pick, w)
-            ev.connect("button-press-event", lambda *a: True)  # don't let the click reach the window (closes)
+            img = Gtk.Image.new_from_pixbuf(pb)
+            img.get_accessible().set_name(w.get_name())  # for screen readers (and the tests)
+            ev.add(img)
+            # the drag source first: GTK starts a drag from its own press handler, which must run before ours
             ev.drag_source_set(Gdk.ModifierType.BUTTON1_MASK,
                                [Gtk.TargetEntry.new("mc-window", Gtk.TargetFlags.SAME_APP, 0)], Gdk.DragAction.MOVE)
+            ev.connect("button-release-event", self.on_pick, w)
+            ev.connect("button-press-event", lambda *a: True)  # don't let the click reach the window (closes)
             ev.drag_source_set_icon_pixbuf(pb.scale_simple(max(1, pb.get_width() // 3), max(1, pb.get_height() // 3),
                                                            GdkPixbuf.InterpType.BILINEAR))
             ev.connect("drag-begin", lambda _w, _c, xid=w.get_xid(): setattr(self, "drag_xid", xid))
             ev.connect("drag-data-get", lambda _w, _c, data, *a: data.set(data.get_target(), 8, b"w"))
             box.pack_start(ev, False, False, 0)
-            name = Gtk.Label(label=(w.get_application().get_name() if w.get_application() else w.get_name()),
-                             ellipsize=3, max_width_chars=40)
+            name = Gtk.Label(label=app_name(w), ellipsize=3, max_width_chars=40)
             name.get_style_context().add_class("title")
             box.pack_start(name, False, False, 0)
             self.grid.add(box)
