@@ -143,11 +143,26 @@ EOF
 # sits ~34 px below that; checked at 1366x768 in a lightdm --test-mode preview). Made at the screen's own size.
 SCR=$(cat /sys/class/drm/card*-*/modes 2>/dev/null | head -1); SCR=${SCR:-1366x768}
 W=${SCR%x*}; H=${SCR#*x}; LBG="$S/login-blur.jpg"
+# One person uses the computer (the usual case): also draw their name, centred, where macOS has it - the greeter's
+# own name box left-aligns short names - and hide that box's text. Several users: keep the greeter's name box.
+# LOGIN_NAME= overrides the name (used for the README screenshot).
+NAME="${LOGIN_NAME:-}"
+if [ -z "$NAME" ] && [ "$(awk -F: '$3 >= 1000 && $3 < 60000 && $7 !~ /(nologin|false)$/' /etc/passwd | wc -l)" = 1 ]; then
+  NAME=$(getent passwd "$U" | cut -d: -f5 | cut -d, -f1); NAME=${NAME:-$U}
+fi
+FONT=$(fc-match -f '%{file}' 'Inter:style=SemiBold' 2>/dev/null)
 if [ -f "/var/lib/AccountsService/icons/$U" ] && [ -f "$S/login-blur.jpg" ]; then
   convert "$S/login-blur.jpg" -resize "${SCR}^" -gravity center -extent "$SCR" \
     \( "/var/lib/AccountsService/icons/$U" -resize 96x96 \) -gravity northwest \
-    -geometry "+$(( W / 2 - 48 ))+$(( H * 76 / 100 - 76 ))" -composite "$S/login-mac.jpg" && LBG="$S/login-mac.jpg"
+    -geometry "+$(( W / 2 - 48 ))+$(( H * 76 / 100 - 76 ))" -composite \
+    ${NAME:+-gravity north ${FONT:+-font "$FONT"} -pointsize 17 -fill '#00000050' -annotate "+0+$(( H * 76 / 100 + 44 ))" "$NAME" \
+            -fill white -annotate "+0+$(( H * 76 / 100 + 43 ))" "$NAME"} \
+    "$S/login-mac.jpg" && LBG="$S/login-mac.jpg"
 fi
+[ -n "$NAME" ] && cat >> "$LT/gtk.css" <<'EOF'
+/* the name is drawn on the background (centred); keep the box (it selects the user) but hide its text */
+#user_combobox label, #user_combobox cellview, #user_combobox button.combo cellview { color: transparent; text-shadow: none; }
+EOF
 cat > /etc/lightdm/lightdm-gtk-greeter.conf <<EOF
 [greeter]
 background=$LBG

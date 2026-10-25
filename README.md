@@ -11,6 +11,17 @@ make it look and work like macOS, so whoever used the Mac doesn't have to relear
 - Black boot screen with an Apple logo, a Sonoma-style login screen
 - Battery warnings, sleep on lid close, and the fixes 2013-2015 MacBooks need to run Linux reliably
 
+![Desktop: Apple menu, global menu with the app's own menus, dock, Finder](docs/screenshots/1-desktop.jpg)
+
+| | |
+|---|---|
+| ![Apple menu](docs/screenshots/2-apple-menu.jpg) **Apple menu** | ![Spotlight](docs/screenshots/3-spotlight.jpg) **Spotlight** (⌘Space) |
+| ![Launchpad](docs/screenshots/4-launchpad.jpg) **Launchpad** (F4, dock, pinch) | ![Mission Control](docs/screenshots/5-mission-control.jpg) **Mission Control** (three-finger swipe up, F3) |
+| ![Login screen](docs/screenshots/6-login.jpg) **Login screen** | |
+
+<sub>Real screenshots from the 2013 MacBook Air at 1366x768, with the system in Spanish (it switches with English).
+Finder's sidebar is hidden and the login screen shows a demo account.</sub>
+
 It all runs on a 4 GB, 2013 MacBook Air: the search and launcher windows only exist while open, so nothing extra
 sits in memory. The look comes from the excellent [WhiteSur](https://github.com/vinceliuice/WhiteSur-gtk-theme)
 themes and [Toshy](https://github.com/RedBearAK/toshy); this repo wires them, and a lot of small fixes, together.
@@ -151,6 +162,8 @@ power saving off) on Apple hardware.
   window. Put a wrapper named `Xephyr` that adds `-screen 1366x768` first in `PATH` to see it at the real size.
 - lightdm-gtk-greeter: style the password field as `#login_window entry` (its builder ids aren't all widget names),
   and build its theme on GTK's own Adwaita, not WhiteSur, whose entry rules win and leave the dots unreadable.
+- lightdm-gtk-greeter left-aligns the user name inside its (fixed-width) box. On a one-person machine script 4 draws
+  the name centred on the background and hides the box's text; `LOGIN_NAME=` overrides the drawn name.
 - Two copies of `appmenu-gtk-module` (xsettings `/Gtk/Modules` plus `GTK_MODULES`) make Chrome segfault on start.
 
 ## Undoing things
