@@ -1,0 +1,262 @@
+#!/usr/bin/env python3
+"""Mission Control for Xfce, after macOS: a Spaces bar across the top (one pill per desktop, + to add one, x to
+remove the last), and the open windows of the current desktop as live previews.
+
+Click a preview to go to that window; click a desktop to switch to it; drag a preview onto a desktop to move the
+window there. Click anywhere else, press Esc, or run it again (three-finger swipe, F3) to close.
+It is a short-lived process: it starts when opened and exits when closed, so it uses no memory the rest of the time.
+Appearance follows ~/.config/mintosh/appearance ("light" or "dark").
+"""
+import os
+import sys
+
+import gi
+
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+gi.require_version("GdkX11", "3.0")
+gi.require_version("Wnck", "3.0")
+from gi.repository import Gdk, GdkPixbuf, GdkX11, GLib, Gtk, Wnck  # noqa: E402
+
+LOCK = os.path.join(GLib.get_user_runtime_dir(), "mission-control.pid")
+ES = os.environ.get("LANG", "").startswith("es")
+T = {"desktop": "Escritorio" if ES else "Desktop"}
+
+
+def already_open():
+    """A second launch (swipe or F3 again) closes the open one instead, like macOS."""
+    try:
+        pid = int(open(LOCK).read())
+        if "mission-control" in open(f"/proc/{pid}/cmdline").read():  # not a reused pid
+            os.kill(pid, 15)
+            return True
+    except (OSError, ValueError):
+        pass
+    open(LOCK, "w").write(str(os.getpid()))
+    return False
+
+
+def appearance():
+    try:
+        return open(os.path.expanduser("~/.config/mintosh/appearance")).read().strip() or "light"
+    except OSError:
+        return "light"
+
+
+DARK = appearance() == "dark"
+CSS = f"""
+window.mc {{ background-color: {'rgba(10,10,14,0.55)' if DARK else 'rgba(20,20,30,0.38)'}; }}
+.spaces {{ padding: 14px 0 6px 0; }}
+.space {{ background-color: rgba(255,255,255,0.16); color: #fff; border-radius: 10px; padding: 6px 18px;
+          border: 1px solid rgba(255,255,255,0.28); font-weight: 600; box-shadow: none; text-shadow: none; }}
+.space:hover {{ background-color: rgba(255,255,255,0.26); }}
+.space.current {{ background-color: rgba(255,255,255,0.42); color: #111; }}
+.space.drop {{ background-color: rgba(10,132,255,0.75); color: #fff; }}
+.add {{ min-width: 30px; padding: 6px 10px; }}
+.thumb {{ border-radius: 12px; padding: 6px; background: transparent; border: 2px solid transparent; }}
+.thumb:hover {{ border-color: rgba(10,132,255,0.95); background-color: rgba(255,255,255,0.08); }}
+.title {{ color: #fff; font-size: 12px; font-weight: 500; text-shadow: 0 1px 2px rgba(0,0,0,0.6); }}
+"""
+
+
+def snapshot(xid, w, h):
+    """Live picture of a window (works for covered windows too, because the compositor keeps their contents)."""
+    try:
+        display = GdkX11.X11Display.get_default()
+        gw = GdkX11.X11Window.foreign_new_for_display(display, xid)
+        if gw is None:
+            return None
+        pb = Gdk.pixbuf_get_from_window(gw, 0, 0, gw.get_width(), gw.get_height())
+        if pb is None:
+            return None
+        s = min(w / pb.get_width(), h / pb.get_height())
+        return pb.scale_simple(max(1, int(pb.get_width() * s)), max(1, int(pb.get_height() * s)),
+                               GdkPixbuf.InterpType.BILINEAR)
+    except Exception:
+        return None
+
+
+class MissionControl(Gtk.Window):
+    def __init__(self):
+        super().__init__(title="Mission Control")
+        self.get_style_context().add_class("mc")
+        self.set_decorated(False)
+        self.set_keep_above(True)
+        self.set_skip_taskbar_hint(True)
+        self.set_skip_pager_hint(True)
+        self.set_type_hint(Gdk.WindowTypeHint.DIALOG)
+        visual = self.get_screen().get_rgba_visual()
+        if visual:
+            self.set_visual(visual)
+        self.set_app_paintable(True)
+        self.connect("key-press-event", self.on_key)
+        self.connect("button-press-event", lambda *a: self.quit())  # empty space closes it
+        self.connect("destroy", lambda *a: self.quit())
+
+        self.screen = Wnck.Screen.get_default()
+        self.screen.force_update()
+        self.drag_xid = None
+        geo = self.get_screen().get_display().get_primary_monitor().get_geometry()
+        self.W, self.H = geo.width, geo.height
+
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self.add(root)
+        self.spaces = Gtk.Box(spacing=10, halign=Gtk.Align.CENTER)
+        self.spaces.get_style_context().add_class("spaces")
+        root.pack_start(self.spaces, False, False, 0)
+        self.grid = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, homogeneous=True,
+                                valign=Gtk.Align.CENTER, halign=Gtk.Align.CENTER,
+                                column_spacing=28, row_spacing=22, max_children_per_line=4)
+        root.pack_start(self.grid, True, True, 0)
+        self.build()
+        self.fullscreen()
+        self.show_all()
+        self.present()
+
+    # -- Spaces bar ------------------------------------------------------------------------------------------
+    def build(self):
+        for c in self.spaces.get_children():
+            self.spaces.remove(c)
+        current = self.screen.get_active_workspace()
+        n = self.screen.get_workspace_count()
+        for i, ws in enumerate(self.screen.get_workspaces()):
+            b = Gtk.Button(label=f"{T['desktop']} {i + 1}")
+            sc = b.get_style_context()
+            sc.add_class("space")
+            if ws == current:
+                sc.add_class("current")
+            b.connect("clicked", self.go_to, ws)
+            b.drag_dest_set(Gtk.DestDefaults.ALL, [Gtk.TargetEntry.new("mc-window", Gtk.TargetFlags.SAME_APP, 0)],
+                            Gdk.DragAction.MOVE)
+            b.connect("drag-motion", lambda w, *a: (w.get_style_context().add_class("drop"), False)[1])
+            b.connect("drag-leave", lambda w, *a: w.get_style_context().remove_class("drop"))
+            b.connect("drag-data-received", self.on_drop, ws)
+            self.spaces.pack_start(b, False, False, 0)
+        if n > 1:
+            rm = Gtk.Button(label="✕")
+            rm.get_style_context().add_class("space")
+            rm.get_style_context().add_class("add")
+            rm.set_tooltip_text("Remove the last desktop" if not ES else "Quitar el último escritorio")
+            rm.connect("clicked", lambda *a: self.set_count(n - 1))
+            self.spaces.pack_start(rm, False, False, 0)
+        add = Gtk.Button(label="+")
+        add.get_style_context().add_class("space")
+        add.get_style_context().add_class("add")
+        add.set_tooltip_text("Add a desktop" if not ES else "Añadir un escritorio")
+        add.connect("clicked", lambda *a: self.set_count(n + 1))
+        self.spaces.pack_start(add, False, False, 0)
+        self.spaces.show_all()
+        self.fill_windows(current)
+
+    def set_count(self, n):
+        # Windows on a removed desktop move to the one before it (xfwm does this itself)
+        os.system(f"xfconf-query -c xfwm4 -p /general/workspace_count -s {max(1, n)}")
+        GLib.timeout_add(250, self.rebuild)
+
+    def rebuild(self):
+        self.screen.force_update()
+        self.build()
+        return False
+
+    def go_to(self, _btn, ws):
+        ws.activate(Gtk.get_current_event_time() or GdkX11.x11_get_server_time(self.get_window()))
+        self.quit()
+
+    # -- Window previews ----------------------------------------------------------------------------------------
+    def fill_windows(self, ws):
+        for c in self.grid.get_children():
+            self.grid.remove(c)
+        wins = [w for w in self.screen.get_windows_stacked()
+                if w.get_window_type() == Wnck.WindowType.NORMAL and not w.is_skip_tasklist()
+                and (w.is_pinned() or w.get_workspace() == ws) and w.get_xid() != self.own_xid()]
+        cols = 1 if len(wins) <= 1 else 2 if len(wins) <= 4 else 3 if len(wins) <= 9 else 4
+        tw = int(self.W * 0.8 / cols) - 40
+        th = int((self.H - 160) / max(1, (len(wins) + cols - 1) // cols)) - 50
+        tw, th = min(tw, 520), min(th, 340)
+        for w in wins:
+            pb = None if w.is_minimized() else snapshot(w.get_xid(), tw, th)
+            if pb is None:
+                pb = w.get_icon()
+            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+            ev = Gtk.EventBox()
+            ev.get_style_context().add_class("thumb")
+            ev.add(Gtk.Image.new_from_pixbuf(pb))
+            ev.connect("button-release-event", self.on_pick, w)
+            ev.connect("button-press-event", lambda *a: True)  # don't let the click reach the window (closes)
+            ev.drag_source_set(Gdk.ModifierType.BUTTON1_MASK,
+                               [Gtk.TargetEntry.new("mc-window", Gtk.TargetFlags.SAME_APP, 0)], Gdk.DragAction.MOVE)
+            ev.drag_source_set_icon_pixbuf(pb.scale_simple(max(1, pb.get_width() // 3), max(1, pb.get_height() // 3),
+                                                           GdkPixbuf.InterpType.BILINEAR))
+            ev.connect("drag-begin", lambda _w, _c, xid=w.get_xid(): setattr(self, "drag_xid", xid))
+            ev.connect("drag-data-get", lambda _w, _c, data, *a: data.set(data.get_target(), 8, b"w"))
+            box.pack_start(ev, False, False, 0)
+            name = Gtk.Label(label=(w.get_application().get_name() if w.get_application() else w.get_name()),
+                             ellipsize=3, max_width_chars=40)
+            name.get_style_context().add_class("title")
+            box.pack_start(name, False, False, 0)
+            self.grid.add(box)
+        self.grid.show_all()
+
+    def own_xid(self):
+        win = self.get_window()
+        return win.get_xid() if win else 0
+
+    def on_pick(self, _ev, event, w):
+        if self.drag_xid:  # a drag ended here rather than a click
+            self.drag_xid = None
+            return True
+        ts = event.time or GdkX11.x11_get_server_time(self.get_window())
+        if w.get_workspace() and w.get_workspace() != self.screen.get_active_workspace():
+            w.get_workspace().activate(ts)
+        w.activate(ts)
+        self.quit()
+        return True
+
+    def on_drop(self, btn, _ctx, _x, _y, _data, _info, _time, ws):
+        btn.get_style_context().remove_class("drop")
+        if self.drag_xid:
+            for w in self.screen.get_windows():
+                if w.get_xid() == self.drag_xid:
+                    w.move_to_workspace(ws)
+            self.drag_xid = None
+            GLib.timeout_add(150, self.rebuild)
+
+    # -- Closing ----------------------------------------------------------------------------------------------
+    def on_key(self, _w, ev):
+        ctrl = ev.state & Gdk.ModifierType.CONTROL_MASK
+        if ev.keyval in (Gdk.KEY_Escape, Gdk.KEY_F3, Gdk.KEY_LaunchA) or (ctrl and ev.keyval in (Gdk.KEY_Up, Gdk.KEY_Down)):
+            self.quit()
+        elif ctrl and ev.keyval in (Gdk.KEY_Left, Gdk.KEY_Right):
+            wss = self.screen.get_workspaces()
+            i = wss.index(self.screen.get_active_workspace()) + (1 if ev.keyval == Gdk.KEY_Right else -1)
+            if 0 <= i < len(wss):
+                wss[i].activate(ev.time)
+                GLib.timeout_add(150, self.rebuild)
+        return True
+
+    def quit(self, *_a):
+        try:
+            os.remove(LOCK)
+        except OSError:
+            pass
+        Gtk.main_quit()
+
+
+if __name__ == "__main__":
+    if already_open():
+        sys.exit(0)
+    prov = Gtk.CssProvider()
+    prov.load_from_data(CSS.encode())
+    Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), prov,
+                                             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+    MissionControl()
+    import signal
+    GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, lambda: (Gtk.main_quit(), False)[1])
+    try:
+        Gtk.main()
+    finally:
+        try:
+            if int(open(LOCK).read()) == os.getpid():
+                os.remove(LOCK)
+        except (OSError, ValueError):
+            pass

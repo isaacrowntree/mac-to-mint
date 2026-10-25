@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+"""Set Chrome's website languages from the system language. Only while Chrome is closed (it rewrites the file)."""
+import json, os, subprocess
+if subprocess.run(["pgrep", "-x", "chrome"], capture_output=True).returncode == 0:
+    raise SystemExit(0)
+lang = (os.environ.get("LANGUAGE") or os.environ.get("LANG") or "en_US").split(":")[0].split(".")[0]
+first = lang.replace("_", "-")                      # es-CO
+base = first.split("-")[0]                          # es
+other = "en" if base != "en" else "es"
+want = ",".join(dict.fromkeys([first, base, other]))
+for prof in ("Default",):
+    p = os.path.expanduser(f"~/.config/google-chrome/{prof}/Preferences")
+    if not os.path.exists(p):
+        continue
+    d = json.load(open(p))
+    intl = d.setdefault("intl", {})
+    blocked = sorted({base, other} | set(d.get("translate_blocked_languages", [])))
+    if (intl.get("accept_languages"), intl.get("selected_languages"), d.get("translate_blocked_languages")) \
+            == (want, want, blocked):
+        continue
+    intl["accept_languages"] = intl["selected_languages"] = want
+    # No "Translate this page?" pop-up for the two system languages; the Translate icon in the address bar still works
+    d["translate_blocked_languages"] = blocked
+    json.dump(d, open(p + ".tmp", "w"))
+    os.replace(p + ".tmp", p)

@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# rofi script mode: lists the user's documents, photos, music and videos; opens the chosen one.
+# Listing takes ~1 s on this Mac, so Spotlight shows the list from the last time and refreshes it in the background.
+if [ -n "${ROFI_INFO:-}" ]; then setsid xdg-open "$ROFI_INFO" >/dev/null 2>&1 & exit 0; fi
+C="$HOME/.cache/spotlight-files"
+if [ -z "${SPOTLIGHT_REFRESH:-}" ]; then
+  [ -s "$C" ] || SPOTLIGHT_REFRESH=1 "$0" > "$C"
+  cat "$C"
+  (SPOTLIGHT_REFRESH=1 "$0" > "$C.new" && mv "$C.new" "$C") >/dev/null 2>&1 &
+  exit 0
+fi
+for d in DESKTOP DOCUMENTS DOWNLOAD PICTURES MUSIC VIDEOS; do xdg-user-dir "$d"; done | sort -u | grep -vx "$HOME" |
+while read -r dir; do [ -d "$dir" ] && find "$dir" -type f -not -path '*/.*' 2>/dev/null; done |
+while read -r f; do
+  case "${f,,}" in
+    *.doc|*.docx|*.odt|*.rtf|*.pages) i=x-office-document ;;
+    *.xls|*.xlsx|*.ods|*.csv|*.numbers) i=x-office-spreadsheet ;;
+    *.ppt|*.pptx|*.pps|*.ppsx|*.odp|*.key) i=x-office-presentation ;;
+    *.pdf) i=application-pdf ;;
+    *.jpg|*.jpeg|*.png|*.gif|*.heic|*.tif|*.tiff|*.bmp|*.webp) i=image-x-generic ;;
+    *.mp3|*.m4a|*.aac|*.wav|*.flac|*.ogg|*.aif|*.aiff) i=audio-x-generic ;;
+    *.mp4|*.mov|*.m4v|*.avi|*.mkv|*.3gp|*.wmv) i=video-x-generic ;;
+    *) i=text-x-generic ;;
+  esac
+  printf '%s\0icon\x1f%s\x1finfo\x1f%s\n' "${f##*/}" "$i" "$f"
+done

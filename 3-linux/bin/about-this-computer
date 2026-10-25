@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# "About This Mac"-style window
+model=$(cat /sys/class/dmi/id/product_name 2>/dev/null)
+cpu=$(lscpu | sed -n 's/^Model name: *//p; s/^Nombre del modelo: *//p' | head -1)
+mem=$(awk '/MemTotal/{printf "%.0f GB", $2/1048576}' /proc/meminfo)
+os=$(lsb_release -ds 2>/dev/null)
+disk=$(df -h --output=avail / | tail -1 | tr -d ' ')
+case "${LANG:-}" in
+  es*) t="Acerca de este equipo"; txt="<b>$model</b>\n\nSistema:  $os\nProcesador:  $cpu\nMemoria:  $mem\nDisco libre:  $disk" ;;
+  *)   t="About This Computer";   txt="<b>$model</b>\n\nSystem:  $os\nProcessor:  $cpu\nMemory:  $mem\nDisk free:  $disk" ;;
+esac
+zenity --info --title="$t" --text="$txt" --width=420

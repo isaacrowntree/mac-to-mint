@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# macOS-style "Low Battery" warnings at 20 % and 10 % while unplugged (a few KB of memory, checks once a minute)
+BAT=$(ls -d /sys/class/power_supply/BAT* 2>/dev/null | head -1); [ -n "$BAT" ] || exit 0
+warned=100
+while sleep 60; do
+  # UPower's figure, the one the menu bar shows (this Mac's kernel "capacity" reads ~10 points lower)
+  cap=$(upower -i "$(upower -e | grep -m1 BAT)" 2>/dev/null | awk '/percentage/{gsub(/[%,].*/, "", $2); print $2}')
+  [ -n "$cap" ] || cap=$(<"$BAT/capacity")
+  st=$(<"$BAT/status")
+  [ "$st" = Discharging ] || { warned=100; continue; }
+  for lvl in 10 20; do
+    [ "$cap" -le $lvl ] && [ $warned -gt $lvl ] || continue
+    warned=$lvl
+    case "${LANG:-}" in
+      es*) t="Batería baja"; m="Queda $cap % de batería. Conecte el cargador pronto." ;;
+      *)   t="Low Battery";  m="$cap% battery remaining. Plug in to a power outlet soon." ;;
+    esac
+    notify-send -u normal -t 10000 -i battery-caution -a Battery "$t" "$m"   # goes away by itself after 10 s
+    break
+  done
+done

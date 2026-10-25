@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Apple menu actions that ask first, like macOS's "Are you sure you want to restart?"
+es=0; case "${LANG:-}" in es*) es=1;; esac
+case "$1" in
+  restart)  q=("Are you sure you want to restart your computer now?" "¿Seguro que desea reiniciar el equipo ahora?"); a=--reboot ;;
+  shutdown) q=("Are you sure you want to shut down your computer now?" "¿Seguro que desea apagar el equipo ahora?"); a=--halt ;;
+  logout)   q=("Are you sure you want to quit all applications and log out now?" "¿Seguro que desea cerrar todas las aplicaciones y la sesión ahora?"); a=--logout ;;
+  *) exit 1 ;;
+esac
+zenity --question --text="${q[$es]}" --ok-label="$([ $es = 1 ] && echo Aceptar || echo OK)" \
+  --cancel-label="$([ $es = 1 ] && echo Cancelar || echo Cancel)" && exec xfce4-session-logout "$a"

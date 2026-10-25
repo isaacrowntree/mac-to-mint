@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Run on the new Mint Xfce install as the normal user (NOT sudo), inside the desktop session:
 #   bash 3-macos-look.sh
-# macOS look: WhiteSur theme/icons/cursor, dock (Plank) at the bottom, menu bar panel at the top with an Apple
-# logo and a macOS-style right side, Spotlight-style search, Finder-like file manager, Mac screenshots,
-# notifications and battery warnings. Safe to re-run. Best effort: each step reports, none is fatal.
-# Then: sudo bash 4-macos-system.sh (boot + login screen, trackpad, power) and bash 5-mac-shortcuts.sh (⌘ shortcuts).
+# macOS look (macOS 26/27 "Liquid Glass"): MacTahoe theme/icons/cursor in light and dark, see-through menu bar with
+# the Apple menu and a global menu, glass dock, Spotlight, Launchpad, Mission Control with Spaces, Finder-like files,
+# Mac screenshots, notifications and battery warnings. Safe to re-run. Best effort: each step reports, none is fatal.
+# APPEARANCE=light|dark|auto (default auto: light by day, dark at night); change later with: appearance dark
+# Then: sudo bash 4-macos-system.sh (boot + login screen, trackpad, glass blur, power) and bash 5-mac-shortcuts.sh.
 set -uo pipefail
-export TERM="${TERM:-xterm}"   # the WhiteSur installer calls setterm, which fails without TERM (e.g. over ssh)
+export TERM="${TERM:-xterm}"   # the theme installers call setterm, which fails without TERM (e.g. over ssh)
 log() { printf '\n==> %s\n' "$*"; }
 # Set an xfconf value; keep the type of an existing property (a wrong -t on an existing one fails)
 X() {
@@ -14,78 +15,80 @@ X() {
   else xfconf-query -c "$1" -p "$2" --create -t "$3" -s "$4"; fi || echo "   (could not set $1 $2)"
 }
 plugins() { xfconf-query -c xfce4-panel -l -v | awk -v t="$1" '$2==t{print $1}'; }   # /plugins/plugin-N of a type
-T="$HOME/.cache/whitesur-src"; mkdir -p "$T"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+T="$HOME/.cache/mintosh-src"; mkdir -p "$T"
 I="$HOME/.local/share/icons/hicolor/scalable/apps"; A="$HOME/.local/share/applications"; B="$HOME/.local/bin"
-mkdir -p "$I" "$A" "$B"
+mkdir -p "$I" "$A" "$B" "$HOME/.local/share/mintosh" "$HOME/.config/autostart"
 DESK="$(xdg-user-dir DESKTOP)"
 
-log "Download WhiteSur theme, icons, cursors"
-for r in WhiteSur-gtk-theme WhiteSur-icon-theme WhiteSur-cursors; do
+log "Download the MacTahoe theme, icons and cursors (vinceliuice's macOS Tahoe recreation) and macOS-style wallpapers"
+for r in MacTahoe-gtk-theme MacTahoe-icon-theme WhiteSur-wallpapers; do
   [ -d "$T/$r" ] || git clone -q --depth 1 "https://github.com/vinceliuice/$r.git" "$T/$r"
 done
 
-log "Install them (into your home folder, no sudo)"
-if [ -d "$HOME/.themes/WhiteSur-Light" ]; then echo "   already installed"; else
-  (cd "$T/WhiteSur-gtk-theme" && ./install.sh -c Light) || echo "   gtk theme install failed - check README flags"
-  (cd "$T/WhiteSur-icon-theme" && ./install.sh)          || echo "   icon theme install failed"
-  (cd "$T/WhiteSur-cursors" && ./install.sh)             || echo "   cursor install failed"
+log "Install them, light and dark (into your home folder, no sudo)"
+if [ -d "$HOME/.themes/MacTahoe-Light" ] && [ -d "$HOME/.themes/MacTahoe-Dark" ]; then echo "   already installed"; else
+  (cd "$T/MacTahoe-gtk-theme" && ./install.sh -c light -c dark) || echo "   theme install failed - check its README flags"
+  (cd "$T/MacTahoe-icon-theme" && ./install.sh)                   || echo "   icon theme install failed"
+  (cd "$T/MacTahoe-icon-theme/cursors" && ./install.sh)           || echo "   cursor install failed"
 fi
 
-log "Apply theme, icons, cursor, bigger fonts"
-X xsettings /Net/ThemeName string WhiteSur-Light
-X xsettings /Net/IconThemeName string WhiteSur-light   # dark system icons; plain WhiteSur's are white (for dark panels) and vanish in the menu
-X xsettings /Gtk/CursorThemeName string WhiteSur-cursors
+log "Helper programs (Spotlight, Launchpad, Mission Control, appearance, Apple menu actions, battery warnings...)"
+install -m 755 "$HERE"/bin/* "$B"/
+
+log "Fonts, cursor, window buttons"
+X xsettings /Gtk/CursorThemeName string MacTahoe-cursors
 X xsettings /Gtk/CursorThemeSize int 32
 X xsettings /Gtk/FontName string "Inter 12"   # fonts-inter (script 1): open stand-in for SF Pro
-X xfwm4 /general/theme string WhiteSur-Light
 X xfwm4 /general/title_font string "Inter Semi-Bold 12"
 X xfwm4 /general/button_layout string "CHM|"     # close, minimize, maximize on the left like macOS
 
 log "Windows like macOS: centred titles, soft shadows, double-click the title bar to zoom"
 X xfwm4 /general/title_alignment string center
-X xfwm4 /general/use_compositing bool true      # also needed for rounded menus, Spotlight and notifications
+# Compositing: picom (script 4) when installed - it blurs what's behind the glass dock, menus and Spotlight -
+# otherwise xfwm's own compositor (shadows, transparency, no blur)
+if command -v picom >/dev/null; then
+  X xfwm4 /general/use_compositing bool false
+  mkdir -p "$HOME/.config/picom"
+  # Real GPU: GLX with dual-Kawase blur. No GPU (virtual machines, llvmpipe): XRender with a lighter blur.
+  backend=glx; blur='method = "dual_kawase"; strength = 5;'
+  glxinfo -B 2>/dev/null | grep -qiE "llvmpipe|softpipe" && { backend=xrender; blur='method = "gaussian"; size = 9; deviation = 4.0;'; }
+  cat > "$HOME/.config/picom/picom.conf" <<EOF
+# mintosh: Liquid Glass - blur behind translucent windows (dock, menus, Spotlight, notifications), rounded corners
+backend = "$backend";
+vsync = true;
+blur: { $blur };
+blur-background = true;
+blur-background-frame = false;
+blur-background-exclude = [ "window_type = 'desktop'", "_GTK_FRAME_EXTENTS@", "class_g = 'Xfdesktop'" ];
+corner-radius = 12;
+rounded-corners-exclude = [ "window_type = 'dock'", "window_type = 'desktop'", "class_g = 'Plank'",
+                            "class_g = 'Xfce4-panel'", "class_g = 'Rofi'", "_GTK_FRAME_EXTENTS@" ];
+shadow = true;
+shadow-radius = 22; shadow-opacity = 0.32; shadow-offset-x = -20; shadow-offset-y = -14;
+shadow-exclude = [ "window_type = 'dock'", "window_type = 'desktop'", "class_g = 'Plank'", "class_g = 'Xfce4-panel'",
+                   "class_g = 'Rofi'", "_GTK_FRAME_EXTENTS@", "window_type = 'notification'" ];
+fading = true; fade-delta = 6; fade-in-step = 0.06; fade-out-step = 0.06;
+EOF
+  printf '[Desktop Entry]\nType=Application\nName=Glass effects (picom)\nExec=picom\nNoDisplay=true\n' \
+    > "$HOME/.config/autostart/picom.desktop"
+  pgrep -x picom >/dev/null || (setsid picom >/dev/null 2>&1 < /dev/null &)
+else
+  X xfwm4 /general/use_compositing bool true
+fi
 X xfwm4 /general/show_frame_shadow bool true
 X xfwm4 /general/show_popup_shadow bool true
 X xfwm4 /general/show_dock_shadow bool false   # else a grey line runs across the screen at the top of Plank's (zoom) area
 X xfwm4 /general/double_click_action string maximize
 
 log "Apple menu (top left) like macOS: About, System Settings, App Store, Force Quit, Sleep, Restart, Shut Down, Lock, Log Out"
-# Logo taken from the WhiteSur source at run time (not stored in this repo); dark grey to match a light menu bar.
+# Logo taken from the MacTahoe source at run time (not stored in this repo); appearance colours it for light/dark.
 # Apps are opened from the dock, Launchpad (F4) and Spotlight (⌘Space), as on a Mac - not from this menu.
 # The source draws the logo in the middle of a 48 px canvas; crop it (logo spans x 9-39, y 6-42) so at the bar's
 # 18 px icon size it is ~17 px tall, the same share of the bar as on macOS
 sed 's/width="48" height="48"/width="38" height="38" viewBox="5 5 38 38"/' \
-  "$T/WhiteSur-gtk-theme/src/assets/gnome-shell/activities-black/activities-apple.svg" > "$I/apple-menu.svg" \
-  || echo "   (Apple logo not found in the WhiteSur source)"
-gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
-cat > "$B/about-this-computer" <<'EOF'
-#!/usr/bin/env bash
-# "About This Mac"-style window
-model=$(cat /sys/class/dmi/id/product_name 2>/dev/null)
-cpu=$(lscpu | sed -n 's/^Model name: *//p; s/^Nombre del modelo: *//p' | head -1)
-mem=$(awk '/MemTotal/{printf "%.0f GB", $2/1048576}' /proc/meminfo)
-os=$(lsb_release -ds 2>/dev/null)
-disk=$(df -h --output=avail / | tail -1 | tr -d ' ')
-case "${LANG:-}" in
-  es*) t="Acerca de este equipo"; txt="<b>$model</b>\n\nSistema:  $os\nProcesador:  $cpu\nMemoria:  $mem\nDisco libre:  $disk" ;;
-  *)   t="About This Computer";   txt="<b>$model</b>\n\nSystem:  $os\nProcessor:  $cpu\nMemory:  $mem\nDisk free:  $disk" ;;
-esac
-zenity --info --title="$t" --text="$txt" --width=420
-EOF
-cat > "$B/apple-action" <<'EOF'
-#!/usr/bin/env bash
-# Apple menu actions that ask first, like macOS's "Are you sure you want to restart?"
-es=0; case "${LANG:-}" in es*) es=1;; esac
-case "$1" in
-  restart)  q=("Are you sure you want to restart your computer now?" "¿Seguro que desea reiniciar el equipo ahora?"); a=--reboot ;;
-  shutdown) q=("Are you sure you want to shut down your computer now?" "¿Seguro que desea apagar el equipo ahora?"); a=--halt ;;
-  logout)   q=("Are you sure you want to quit all applications and log out now?" "¿Seguro que desea cerrar todas las aplicaciones y la sesión ahora?"); a=--logout ;;
-  *) exit 1 ;;
-esac
-zenity --question --text="${q[$es]}" --ok-label="$([ $es = 1 ] && echo Aceptar || echo OK)" \
-  --cancel-label="$([ $es = 1 ] && echo Cancelar || echo Cancel)" && exec xfce4-session-logout "$a"
-EOF
-chmod +x "$B/about-this-computer" "$B/apple-action"
+  "$T/MacTahoe-gtk-theme/src/assets/gnome-shell/activities-black/activities-apple.svg" \
+  > "$HOME/.local/share/mintosh/apple-logo.svg" || echo "   (Apple logo not found in the MacTahoe source)"
 # The menu is Xfce's Applications Menu button pointed at a custom menu file: a real menu, text only, with
 # separators like macOS. Its entries live outside ~/.local/share/applications so Spotlight/Launchpad don't list them.
 rm -rf "$A/apple-menu"   # earlier version of this menu
@@ -131,54 +134,16 @@ put "$APPLE_MENU" <<EOF
 </Menu>
 EOF
 
-log "Launchpad: F4 or the dock icon shows all apps full screen (rofi: no memory used while closed)"
-mkdir -p "$HOME/.local/share/rofi/themes"
-cat > "$HOME/.local/share/rofi/themes/launchpad.rasi" <<'EOF'
-* { font: "Inter 12"; background-color: transparent; text-color: #ffffff; }
-/* Whole screen (the dock hides itself behind windows, so leaving its strip open showed them); Esc or F4 closes.
-   Background: the blurred wallpaper (the launchpad script makes it at screen size), darkened, as on macOS */
-window { fullscreen: true; background-color: #2c2c2e; }
-mainbox { children: [ inputbar, listview ]; spacing: 36px; padding: 6% 9%; background-color: #00000040; }
-inputbar { children: [ entry ]; margin: 0 38%; padding: 6px 12px; border-radius: 8px; background-color: #ffffff26; }
-entry { placeholder-color: #ffffffaa; horizontal-align: 0.5; }
-listview { columns: 7; lines: 4; flow: horizontal; fixed-columns: true; spacing: 20px; scrollbar: false; }
-element { orientation: vertical; padding: 10px 6px; spacing: 8px; border-radius: 14px; }
-element selected.normal { background-color: #ffffff33; }
-element-icon { size: 64px; horizontal-align: 0.5; }
-element-text { horizontal-align: 0.5; text-color: inherit; }
-EOF
-cat > "$B/launchpad" <<'EOF'
-#!/usr/bin/env bash
-# Launchpad-style grid of all apps; F4 again or Esc closes it
-pkill -x rofi && exit 0
-case "${LANG:-}" in es*) ph="Buscar";; *) ph="Search";; esac
-# Blurred wallpaper at exactly the screen size, made once (scaling a bigger image left a strip uncovered)
-BG="$HOME/.cache/launchpad-bg.jpg"
-if [ ! -s "$BG" ] && command -v convert >/dev/null; then
-  size=$(xrandr 2>/dev/null | awk '/\*/{print $1; exit}'); size=${size:-1366x768}
-  src=/usr/share/backgrounds/macos/login-blur.jpg; [ -f "$src" ] || src="$HOME/.local/share/backgrounds/macos/Sonoma-light.jpg"
-  convert "$src" -resize "$size^" -gravity center -extent "$size" -blur 0x20 "$BG" 2>/dev/null
-fi
-# (rofi refuses a background-image in -theme-str next to another rule, so it goes in a small theme of its own)
-T="$HOME/.cache/launchpad.rasi"
-{ echo "@import \"$HOME/.local/share/rofi/themes/launchpad.rasi\""; [ -s "$BG" ] && echo "window { background-image: url(\"$BG\", width); }"; } > "$T"
-# Apps only, like Launchpad: settings panels and system tools (Terminal...) stay in System Settings / Spotlight
-# One click opens an app, as on a Mac (rofi's default is click to select, double-click to open)
-exec rofi -show drun -show-icons -drun-use-desktop-cache -drun-display-format '{name}' -theme "$T" \
-  -me-select-entry '' -me-accept-entry MousePrimary \
-  -drun-categories Office,Network,Graphics,AudioVideo,Audio,Video,Game,Education,Utility \
-  -theme-str "entry { placeholder: \"$ph\"; }"
-EOF
-chmod +x "$B/launchpad"
+log "Launchpad: F4, the dock icon or a pinch shows all apps full screen (rofi: no memory used while closed)"
 printf '[Desktop Entry]\nType=Application\nName=Launchpad\nExec=%s\nIcon=view-app-grid\nNoDisplay=true\nStartupNotify=false\n' "$B/launchpad" > "$A/launchpad.desktop"
 
-log "macOS-style wallpapers (WhiteSur recreations), random, changing every hour"
-[ -d "$T/WhiteSur-wallpapers" ] || git clone -q --depth 1 https://github.com/vinceliuice/WhiteSur-wallpapers.git "$T/WhiteSur-wallpapers"
-W="$HOME/.local/share/backgrounds/macos"; mkdir -p "$W"
-cp "$T"/WhiteSur-wallpapers/2k/*.jpg "$T"/WhiteSur-wallpapers/4k/{Sonoma,Ventura}-*.jpg "$W"/   # 2k lacks Sonoma/Ventura
+log "macOS-style wallpapers (WhiteSur recreations): a light set and a dark set, rotating hourly"
+for m in light dark; do
+  W="$HOME/.local/share/backgrounds/mintosh/$m"; mkdir -p "$W"
+  cp "$T"/WhiteSur-wallpapers/4k/*-"$m".jpg "$W"/ 2>/dev/null
+done
 for p in $(xfconf-query -c xfce4-desktop -l | grep -E "workspace[0-9]+/last-image$"); do
   b=${p%/last-image}
-  X xfce4-desktop "$b/last-image" string "$W/Sonoma-light.jpg"
   X xfce4-desktop "$b/image-style" int 5                       # zoomed
   X xfce4-desktop "$b/backdrop-cycle-enable" bool true          # cycles through the folder of last-image
   X xfce4-desktop "$b/backdrop-cycle-period" int 4              # hourly
@@ -254,17 +219,6 @@ for p in $(apple_menus); do
   X xfce4-panel "$p/show-tooltips" bool false
   X xfce4-panel "$p/show-generic-names" bool false
 done
-# Panel text: WhiteSur makes it bold; macOS's menu bar is regular weight (the app name next to the logo stays bold)
-mkdir -p "$HOME/.config/gtk-3.0"; touch "$HOME/.config/gtk-3.0/gtk.css"
-sed -i -e '/mintosh panel/,/mintosh end/d' -e '/mac-to-mint panel/,/mac-to-mint end/d' "$HOME/.config/gtk-3.0/gtk.css"   # (old name too)
-cat >> "$HOME/.config/gtk-3.0/gtk.css" <<'EOF'
-/* mintosh panel */
-.xfce4-panel.background, .xfce4-panel.background button, .xfce4-panel.background button.flat { font-weight: 500; }
-/* room around the Apple logo, as on macOS */
-.xfce4-panel.background button#applicationmenu-button,
-.xfce4-panel.background button.flat#applicationmenu-button { padding: 0 14px 0 18px; }   /* beats WhiteSur's button rule */
-/* mintosh end */
-EOF
 # The Gemini button keeps the icon of the .desktop copy the panel made when it was added; refresh it
 [ -s "$I/google-gemini-panel.svg" ] && \
   sed -i -E 's/^Icon=(google-)?gemini$/Icon=google-gemini-panel/' "$HOME"/.config/xfce4/panel/launcher-*/*.desktop 2>/dev/null
@@ -342,8 +296,6 @@ for d in "$HOME"/.config/xfce4/panel/launcher-*; do
 done
 
 log "Dock (Plank) with the everyday apps"
-PT="$(find "$T/WhiteSur-gtk-theme" -type d -path '*plank*' -name '*Light*' | head -1)"
-if [ -n "$PT" ]; then mkdir -p "$HOME/.local/share/plank/themes/WhiteSur-Light" && cp -r "$PT"/. "$HOME/.local/share/plank/themes/WhiteSur-Light/"; fi
 
 L="$HOME/.config/plank/dock1/launchers"; mkdir -p "$L"
 items=()
@@ -354,9 +306,6 @@ for app in thunar launchpad google-chrome libreoffice-writer libreoffice-calc li
   items+=("'$app.dockitem'")
 done
 # macOS sections: apps | Downloads, Trash. Plank has no separator item, so a launcher with a thin-line icon stands in.
-cat > "$I/dock-separator.svg" <<'EOF'
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect x="31" y="6" width="2" height="52" rx="1" fill="#000" fill-opacity="0.28"/></svg>
-EOF
 printf '[Desktop Entry]\nType=Application\nName=\xe2\x80\x8b\nExec=true\nIcon=dock-separator\nNoDisplay=true\n' > "$A/dock-separator.desktop"
 printf '[Desktop Entry]\nType=Application\nName=Downloads\nName[es]=Descargas\nExec=thunar "%s"\nIcon=folder-download\nNoDisplay=true\n' "$(xdg-user-dir DOWNLOAD)" > "$A/dock-downloads.desktop"
 gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
@@ -366,12 +315,10 @@ printf '[PlankDockItemPreferences]\nLauncher=docklet://trash\n' > "$L/trash.dock
 items+=("'separator.dockitem'" "'downloads.dockitem'" "'trash.dockitem'")
 D=net.launchpad.plank.dock.settings:/net/launchpad/plank/docks/dock1/
 gsettings set "$D" dock-items "[$(IFS=,; echo "${items[*]}")]" 2>/dev/null || true
-gsettings set "$D" theme 'WhiteSur-Light' 2>/dev/null || true   # its dots under open apps, like macOS
 gsettings set "$D" icon-size 56 2>/dev/null || true
 gsettings set "$D" zoom-enabled true 2>/dev/null || true
 gsettings set "$D" current-workspace-only false 2>/dev/null || true
 
-mkdir -p "$HOME/.config/autostart"
 printf '[Desktop Entry]\nType=Application\nName=Plank\nExec=plank\nX-GNOME-Autostart-enabled=true\n' > "$HOME/.config/autostart/plank.desktop"
 pgrep -x plank >/dev/null || (plank >/dev/null 2>&1 &)
 
@@ -391,39 +338,10 @@ for d in DOCUMENTS DOWNLOAD PICTURES MUSIC VIDEOS; do
   grep -q "^$u\( \|$\)" "$BM" || echo "$u" >> "$BM"
 done
 
-log "Mission Control: three-finger swipe up or down (or F3) opens and closes a view of all open windows; thumb + three fingers: pinch = Launchpad, spread = desktop"
-# rofi's window list as a grid of live window previews (nothing runs while it's closed; -window-thumbnail needs
-# -show-icons or the previews stay blank). Touchegg (script 4) turns trackpad gestures into these commands.
-cat > "$HOME/.local/share/rofi/themes/mission.rasi" <<'EOF'
-* { font: "Inter 11"; background-color: transparent; text-color: #ffffff; }
-/* only as tall as the rows of windows it shows, so most of the screen is "outside": clicking there closes it
-   (rofi can't close on a click on empty space inside its own window) */
-window { location: center; width: 86%; border-radius: 16px; background-color: #1c1c1ee8; }
-mainbox { children: [ listview ]; padding: 24px; }
-listview { fixed-height: false; columns: 3; lines: 2; flow: horizontal; fixed-columns: true; spacing: 28px; scrollbar: false; }
-element { orientation: vertical; padding: 8px; spacing: 6px; border-radius: 12px; }
-element selected.normal { background-color: #ffffff2e; }
-element-icon { size: 240px; horizontal-align: 0.5; }
-element-text { horizontal-align: 0.5; text-color: inherit; }
-EOF
-cat > "$B/mission-control" <<'EOF'
-#!/usr/bin/env bash
-# Mission Control-style view of all open windows; one click (or Enter) goes to that window
-pkill -x rofi && exit 0
-exec rofi -show window -show-icons -window-thumbnail -window-format '{t}' -theme mission \
-  -me-select-entry '' -me-accept-entry MousePrimary
-EOF
-chmod +x "$B/mission-control"
-cat > "$B/gesture" <<'EOF'
-#!/usr/bin/env bash
-# macOS thumb-and-three-finger gestures: pinch = Launchpad, spread = show the desktop (pinch again brings windows back)
-desk() { wmctrl -m | grep -q '"showing the desktop" mode: ON'; }
-case "$1" in
-  pinch)  if desk; then wmctrl -k off; else exec "$HOME/.local/bin/launchpad"; fi ;;
-  spread) if pkill -x rofi; then :; elif desk; then wmctrl -k off; else wmctrl -k on; fi ;;
-esac
-EOF
-chmod +x "$B/gesture"
+log "Mission Control (three-finger swipe up/down, F3, Ctrl+↑): Spaces bar on top, live window previews"
+# bin/mission-control (Python + GTK, runs only while open). Desktops: three-finger swipe left/right, Ctrl+←/→,
+# or click one in the Spaces bar; + adds one. Thumb + three fingers: pinch = Launchpad, spread = show desktop.
+rm -f "$HOME/.local/share/rofi/themes/mission.rasi"   # the earlier rofi version
 mkdir -p "$HOME/.config/touchegg"
 cat > "$HOME/.config/touchegg/touchegg.conf" <<EOF
 <touchégg>
@@ -438,6 +356,12 @@ cat > "$HOME/.config/touchegg/touchegg.conf" <<EOF
     <gesture type="SWIPE" fingers="3" direction="DOWN">
       <action type="RUN_COMMAND"><repeat>false</repeat><command>$B/mission-control</command><on>begin</on></action>
     </gesture>
+    <gesture type="SWIPE" fingers="3" direction="LEFT">
+      <action type="RUN_COMMAND"><repeat>false</repeat><command>$B/gesture left</command><on>begin</on></action>
+    </gesture>
+    <gesture type="SWIPE" fingers="3" direction="RIGHT">
+      <action type="RUN_COMMAND"><repeat>false</repeat><command>$B/gesture right</command><on>begin</on></action>
+    </gesture>
     <gesture type="PINCH" fingers="4" direction="IN">
       <action type="RUN_COMMAND"><repeat>false</repeat><command>$B/gesture pinch</command><on>begin</on></action>
     </gesture>
@@ -450,63 +374,6 @@ EOF
 if command -v touchegg >/dev/null; then pkill -x touchegg; (setsid touchegg >/dev/null 2>&1 < /dev/null &); fi
 
 log "Spotlight: ⌘Space (Super+Space) opens a centred search bar for apps and files (rofi: no memory used while closed)"
-mkdir -p "$HOME/.local/share/rofi/themes"
-# macOS Sonoma: 680 px bar a quarter of the way down, magnifier, large light text, results only once you type
-cat > "$HOME/.local/share/rofi/themes/spotlight.rasi" <<'EOF'
-* { font: "Inter 13"; bg: #ececece8; fg: #1d1d1f; dim: #8e8e93; sel: #0a64d6; selfg: #ffffff;
-    background-color: transparent; text-color: @fg; }
-window { location: north; anchor: north; y-offset: 24%; width: 680px; padding: 0;
-         border: 1px; border-color: #00000026; border-radius: 12px; background-color: @bg; }
-mainbox { children: [ inputbar, listview ]; spacing: 0; }
-inputbar { children: [ icon-search, entry ]; spacing: 10px; padding: 12px 16px; }
-icon-search { expand: false; filename: "system-search-symbolic"; size: 22px; vertical-align: 0.5; }
-entry { font: "Inter Light 21"; placeholder-color: @dim; vertical-align: 0.5; }
-listview { require-input: true; lines: 8; fixed-height: false; scrollbar: false; spacing: 0;
-           padding: 6px 8px 8px; border: 1px 0 0 0; border-color: #0000001a; }
-element { padding: 5px 10px; spacing: 10px; border-radius: 6px; }
-element selected.normal { background-color: @sel; text-color: @selfg; }
-element-icon { size: 22px; }
-element-text { text-color: inherit; vertical-align: 0.5; highlight: bold; }   /* bold match, no underline */
-EOF
-cat > "$B/spotlight-files" <<'EOF'
-#!/usr/bin/env bash
-# rofi script mode: lists the user's documents, photos, music and videos; opens the chosen one.
-# Listing takes ~1 s on this Mac, so Spotlight shows the list from the last time and refreshes it in the background.
-if [ -n "${ROFI_INFO:-}" ]; then setsid xdg-open "$ROFI_INFO" >/dev/null 2>&1 & exit 0; fi
-C="$HOME/.cache/spotlight-files"
-if [ -z "${SPOTLIGHT_REFRESH:-}" ]; then
-  [ -s "$C" ] || SPOTLIGHT_REFRESH=1 "$0" > "$C"
-  cat "$C"
-  (SPOTLIGHT_REFRESH=1 "$0" > "$C.new" && mv "$C.new" "$C") >/dev/null 2>&1 &
-  exit 0
-fi
-for d in DESKTOP DOCUMENTS DOWNLOAD PICTURES MUSIC VIDEOS; do xdg-user-dir "$d"; done | sort -u | grep -vx "$HOME" |
-while read -r dir; do [ -d "$dir" ] && find "$dir" -type f -not -path '*/.*' 2>/dev/null; done |
-while read -r f; do
-  case "${f,,}" in
-    *.doc|*.docx|*.odt|*.rtf|*.pages) i=x-office-document ;;
-    *.xls|*.xlsx|*.ods|*.csv|*.numbers) i=x-office-spreadsheet ;;
-    *.ppt|*.pptx|*.pps|*.ppsx|*.odp|*.key) i=x-office-presentation ;;
-    *.pdf) i=application-pdf ;;
-    *.jpg|*.jpeg|*.png|*.gif|*.heic|*.tif|*.tiff|*.bmp|*.webp) i=image-x-generic ;;
-    *.mp3|*.m4a|*.aac|*.wav|*.flac|*.ogg|*.aif|*.aiff) i=audio-x-generic ;;
-    *.mp4|*.mov|*.m4v|*.avi|*.mkv|*.3gp|*.wmv) i=video-x-generic ;;
-    *) i=text-x-generic ;;
-  esac
-  printf '%s\0icon\x1f%s\x1finfo\x1f%s\n' "${f##*/}" "$i" "$f"
-done
-EOF
-cat > "$B/spotlight" <<'EOF'
-#!/usr/bin/env bash
-# Spotlight-style search (apps first, then files); pressing the shortcut again closes it
-pkill -x rofi && exit 0
-case "${LANG:-}" in es*) ph="Búsqueda de Spotlight";; *) ph="Spotlight Search";; esac
-# Match app names only (not their commands: "libre" found the Menu Editor, menulibre), best matches first
-exec rofi -show combi -combi-modes "drun,files:$HOME/.local/bin/spotlight-files" -combi-hide-mode-prefix \
-  -drun-match-fields name,generic,keywords -sort -sorting-method fzf -me-select-entry '' -me-accept-entry MousePrimary \
-  -show-icons -drun-display-format '{name}' -theme spotlight -theme-str "entry { placeholder: \"$ph\"; }"
-EOF
-chmod +x "$B/spotlight" "$B/spotlight-files"
 X xfce4-keyboard-shortcuts "/commands/custom/<Super>space" string "$B/spotlight"   # Toshy turns ⌘Space into this
 
 log "Screenshots like macOS: ⌘⇧3 whole screen, ⌘⇧4 an area, saved to the Desktop"
@@ -528,8 +395,15 @@ else
   X keyboard-layout /Default/XkbVariant string ""
 fi
 
-log "One desktop, as a Mac starts with (Mint's four meant windows could seem to vanish to another one)"
+log "Desktops (Spaces): one to start with, as on a Mac; add more from Mission Control's + button"
 X xfwm4 /general/workspace_count int 1
+X xfwm4 /general/wrap_workspaces bool false
+# Ctrl+←/→ switch desktops, as on macOS. Toshy (script 5) sends the physical Ctrl+←/→ as Ctrl+Alt+End/Home (its Xfce
+# mapping). Plain Ctrl+←/→ is left alone: with Toshy that is what ⌥←/→ (jump a word) becomes.
+for k in "<Primary><Alt>End:left" "<Primary><Alt>Home:right"; do
+  X xfce4-keyboard-shortcuts "/xfwm4/custom/${k%%:*}" string "${k##*:}_workspace_key"
+done
+X xfce4-keyboard-shortcuts "/commands/custom/<Primary>Up" string "$B/mission-control"
 
 log "⌘⌥Esc (Ctrl+Alt+Esc once Toshy maps ⌘) = Force Quit, not Xfce's xkill skull cursor"
 X xfce4-keyboard-shortcuts "/commands/custom/<Primary><Alt>Escape" string xfce4-taskmanager
@@ -544,17 +418,7 @@ log "On-screen pop-ups for the volume and brightness keys, like macOS"
 X xfce4-power-manager /xfce4-power-manager/handle-brightness-keys bool true
 X xfce4-power-manager /xfce4-power-manager/show-brightness-popup bool true
 
-log "Notifications: rounded, light, top right, gone after 5 s, like macOS banners"
-N="$HOME/.local/share/themes/macOS/xfce-notify-4.0"; mkdir -p "$N"
-cat > "$N/gtk.css" <<'EOF'
-#XfceNotifyWindow { background-color: rgba(246, 246, 246, 0.96); border: 1px solid rgba(0, 0, 0, 0.12);
-                    border-radius: 14px; padding: 10px 12px; }
-#XfceNotifyWindow label#summary { font-weight: 600; color: #1d1d1f; }
-#XfceNotifyWindow label#body { color: #3a3a3c; }
-#XfceNotifyWindow image#icon { margin-right: 8px; }
-#XfceNotifyWindow button { border-radius: 8px; }
-EOF
-X xfce4-notifyd /theme string macOS
+log "Notifications: glass, top right, gone after 5 s, like macOS banners"
 X xfce4-notifyd /notify-location uint 2       # top right
 X xfce4-notifyd /expire-timeout int 5
 X xfce4-notifyd /do-slideout bool true
@@ -572,30 +436,6 @@ X xfce4-power-manager $P/lid-action-on-battery uint 1           # close the lid 
 X xfce4-power-manager $P/lid-action-on-ac uint 1
 X xfce4-power-manager $P/critical-power-level uint 5
 X xfce4-power-manager $P/critical-power-action uint 1           # sleep (keeps open work) rather than shut down
-cat > "$B/battery-warning" <<'EOF'
-#!/usr/bin/env bash
-# macOS-style "Low Battery" warnings at 20 % and 10 % while unplugged (a few KB of memory, checks once a minute)
-BAT=$(ls -d /sys/class/power_supply/BAT* 2>/dev/null | head -1); [ -n "$BAT" ] || exit 0
-warned=100
-while sleep 60; do
-  # UPower's figure, the one the menu bar shows (this Mac's kernel "capacity" reads ~10 points lower)
-  cap=$(upower -i "$(upower -e | grep -m1 BAT)" 2>/dev/null | awk '/percentage/{gsub(/[%,].*/, "", $2); print $2}')
-  [ -n "$cap" ] || cap=$(<"$BAT/capacity")
-  st=$(<"$BAT/status")
-  [ "$st" = Discharging ] || { warned=100; continue; }
-  for lvl in 10 20; do
-    [ "$cap" -le $lvl ] && [ $warned -gt $lvl ] || continue
-    warned=$lvl
-    case "${LANG:-}" in
-      es*) t="Batería baja"; m="Queda $cap % de batería. Conecte el cargador pronto." ;;
-      *)   t="Low Battery";  m="$cap% battery remaining. Plug in to a power outlet soon." ;;
-    esac
-    notify-send -u normal -t 10000 -i battery-caution -a Battery "$t" "$m"   # goes away by itself after 10 s
-    break
-  done
-done
-EOF
-chmod +x "$B/battery-warning"
 printf '[Desktop Entry]\nType=Application\nName=Low battery warning\nExec=%s\nNoDisplay=true\n' "$B/battery-warning" \
   > "$HOME/.config/autostart/battery-warning.desktop"
 pgrep -f "$B/battery-warning" >/dev/null || (setsid "$B/battery-warning" >/dev/null 2>&1 &)
@@ -603,34 +443,6 @@ pgrep -f "$B/battery-warning" >/dev/null || (setsid "$B/battery-warning" >/dev/n
 log "Chrome and Gemini follow the system language (Settings > Languages), checked at each login"
 # Chrome keeps the website languages it was given when the profile was made (English here), so Spanish pages and
 # Gemini came up in English with a Translate offer. Before Chrome starts, put the system language first.
-cat > "$B/chrome-language" <<'EOF'
-#!/usr/bin/env python3
-"""Set Chrome's website languages from the system language. Only while Chrome is closed (it rewrites the file)."""
-import json, os, subprocess
-if subprocess.run(["pgrep", "-x", "chrome"], capture_output=True).returncode == 0:
-    raise SystemExit(0)
-lang = (os.environ.get("LANGUAGE") or os.environ.get("LANG") or "en_US").split(":")[0].split(".")[0]
-first = lang.replace("_", "-")                      # es-CO
-base = first.split("-")[0]                          # es
-other = "en" if base != "en" else "es"
-want = ",".join(dict.fromkeys([first, base, other]))
-for prof in ("Default",):
-    p = os.path.expanduser(f"~/.config/google-chrome/{prof}/Preferences")
-    if not os.path.exists(p):
-        continue
-    d = json.load(open(p))
-    intl = d.setdefault("intl", {})
-    blocked = sorted({base, other} | set(d.get("translate_blocked_languages", [])))
-    if (intl.get("accept_languages"), intl.get("selected_languages"), d.get("translate_blocked_languages")) \
-            == (want, want, blocked):
-        continue
-    intl["accept_languages"] = intl["selected_languages"] = want
-    # No "Translate this page?" pop-up for the two system languages; the Translate icon in the address bar still works
-    d["translate_blocked_languages"] = blocked
-    json.dump(d, open(p + ".tmp", "w"))
-    os.replace(p + ".tmp", p)
-EOF
-chmod +x "$B/chrome-language"
 printf '[Desktop Entry]\nType=Application\nName=Chrome language\nExec=%s\nNoDisplay=true\n' "$B/chrome-language" \
   > "$HOME/.config/autostart/chrome-language.desktop"
 "$B/chrome-language" || true
@@ -650,5 +462,13 @@ for old in aviso-bateria chrome-idioma acerca-de gesto; do
   rm -f "$B/$old" "$HOME/.config/autostart/$old.desktop"
 done
 pkill -f "^bash $B/aviso-bateria$" 2>/dev/null || true
+
+log "Appearance: ${APPEARANCE:-auto} (light, dark or auto - change any time with: appearance dark)"
+printf '[Desktop Entry]\nType=Application\nName=Appearance\nExec=sh -c "%s; exec %s --watch"\nNoDisplay=true\n' \
+  "$B/appearance" "$B/appearance" > "$HOME/.config/autostart/appearance.desktop"
+printf '[Desktop Entry]\nType=Application\nName=Appearance: Light\nExec=%s light\nIcon=weather-clear-symbolic\nCategories=Settings;\n' "$B/appearance" > "$A/appearance-light.desktop"
+printf '[Desktop Entry]\nType=Application\nName=Appearance: Dark\nExec=%s dark\nIcon=weather-clear-night-symbolic\nCategories=Settings;\n' "$B/appearance" > "$A/appearance-dark.desktop"
+printf '[Desktop Entry]\nType=Application\nName=Appearance: Auto\nExec=%s auto\nIcon=preferences-desktop-theme-symbolic\nCategories=Settings;\n' "$B/appearance" > "$A/appearance-auto.desktop"
+FORCE=1 "$B/appearance" "${APPEARANCE:-auto}"
 
 log "Done. Log out and back in to see everything applied."

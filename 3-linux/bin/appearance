@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+# Light, Dark or Auto appearance for the whole mintosh skin, like macOS's System Settings > Appearance:
+#   appearance light | dark | auto      (no argument: apply the saved choice again)
+# Auto is light from 7:00 to 19:00 and dark otherwise; a small watcher started at login switches it on time.
+# Everything that has a light and a dark look follows: the MacTahoe theme, icons and window borders, the see-through
+# menu bar text, the Apple logo, the glass dock, Spotlight, Launchpad, Mission Control, notifications, the wallpapers,
+# and apps that follow the system colour scheme (Chrome, LibreOffice, GTK 4 apps).
+set -uo pipefail
+CFG="$HOME/.config/mintosh"; mkdir -p "$CFG"
+B="$HOME/.local/bin"; I="$HOME/.local/share/icons/hicolor/scalable/apps"
+X() {
+  if xfconf-query -c "$1" -p "$2" >/dev/null 2>&1; then xfconf-query -c "$1" -p "$2" -s "$4"
+  else xfconf-query -c "$1" -p "$2" --create -t "$3" -s "$4"; fi 2>/dev/null
+}
+choice="${1:-$(cat "$CFG/appearance-choice" 2>/dev/null || echo auto)}"
+case "$choice" in
+  light|dark|auto) ;;
+  --watch)  # started at login: re-check the auto choice every 10 minutes
+    while sleep 600; do [ "$(cat "$CFG/appearance-choice" 2>/dev/null)" = auto ] && "$0" auto; done; exit 0 ;;
+  *) echo "usage: appearance light|dark|auto"; exit 1 ;;
+esac
+echo "$choice" > "$CFG/appearance-choice"
+m=$choice
+if [ "$m" = auto ]; then h=$(date +%-H); if [ "$h" -ge 7 ] && [ "$h" -lt 19 ]; then m=light; else m=dark; fi; fi
+[ "$(cat "$CFG/appearance" 2>/dev/null)" = "$m" ] && [ -z "${FORCE:-}" ] && [ "${1:-}" = auto ] && exit 0
+echo "$m" > "$CFG/appearance"
+M=${m^}   # Light / Dark
+
+if [ "$m" = light ]; then
+  fg="#1d1d1f"; glass="rgba(255,255,255,0.62)"; glass_hex="#ffffff9e"; edge="rgba(255,255,255,0.75)"; line="#0000001f"
+  dim="#6e6e73"; bar_shade="linear-gradient(to bottom, rgba(255,255,255,0.32), rgba(255,255,255,0))"
+  dock_fill="255;;255;;255;;95"; dock_edge="255;;255;;255;;190"; logo="#1d1d1f"; sep="#000000"; sep_op=0.22
+else
+  fg="#f5f5f7"; glass="rgba(30,30,34,0.58)"; glass_hex="#1e1e2294"; edge="rgba(255,255,255,0.22)"; line="#ffffff24"
+  dim="#98989d"; bar_shade="linear-gradient(to bottom, rgba(0,0,0,0.34), rgba(0,0,0,0))"
+  dock_fill="38;;38;;44;;130"; dock_edge="255;;255;;255;;70"; logo="#ffffff"; sep="#ffffff"; sep_op=0.3
+fi
+accent="#0a84ff"
+
+# Theme, icons, window borders; apps that follow the freedesktop colour scheme (Chrome, GTK 4, LibreOffice)
+X xsettings /Net/ThemeName string "MacTahoe-$M"
+X xsettings /Net/IconThemeName string "MacTahoe-$m"
+X xfwm4 /general/theme string "MacTahoe-$M"
+gsettings set org.gnome.desktop.interface color-scheme "$([ $m = dark ] && echo prefer-dark || echo default)" 2>/dev/null
+gsettings set org.gnome.desktop.interface gtk-theme "MacTahoe-$M" 2>/dev/null
+gsettings set org.x.apps.portal color-scheme "$([ $m = dark ] && echo prefer-dark || echo default)" 2>/dev/null
+
+# Apple logo in the menu bar (black on light, white on dark, as macOS draws it over the wallpaper)
+SRC="$HOME/.local/share/mintosh/apple-logo.svg"
+[ -f "$SRC" ] && sed -E "s/fill:#[0-9a-fA-F]{3,6}/fill:$logo/g" "$SRC" > "$I/apple-menu.svg"
+printf '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect x="31" y="6" width="2" height="52" rx="1" fill="%s" fill-opacity="%s"/></svg>\n' \
+  "$sep" "$sep_op" > "$I/dock-separator.svg"
+gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
+
+# Menu bar: no bar of its own (Liquid Glass) - text and icons straight on the wallpaper, with a faint shade at the
+# top for legibility (macOS Tahoe does the same); regular-weight text, the app name next to the logo stays bold
+CSS="$HOME/.config/gtk-3.0/gtk.css"; mkdir -p "${CSS%/*}"; touch "$CSS"
+sed -i -e '/mintosh panel/,/mintosh end/d' -e '/mac-to-mint panel/,/mac-to-mint end/d' "$CSS"
+cat >> "$CSS" <<EOF
+/* mintosh panel ($m) */
+.xfce4-panel.background { background-color: transparent; background-image: $bar_shade; color: $fg; }
+.xfce4-panel.background, .xfce4-panel.background button, .xfce4-panel.background button.flat,
+.xfce4-panel.background label { font-weight: 500; color: $fg; text-shadow: none; }
+.xfce4-panel.background button, .xfce4-panel.background button.flat { background: transparent; border: none; box-shadow: none; }
+.xfce4-panel.background button:hover, .xfce4-panel.background button:checked { background-color: ${glass}; border-radius: 8px; }
+.xfce4-panel.background button#applicationmenu-button,
+.xfce4-panel.background button.flat#applicationmenu-button { padding: 0 14px 0 18px; }   /* room around the Apple logo */
+/* mintosh end */
+EOF
+
+# Glass dock (Plank): translucent fill with a bright edge; picom blurs what's behind it
+PD="$HOME/.local/share/plank/themes/mintosh-$m"; mkdir -p "$PD"
+cat > "$PD/dock.theme" <<EOF
+[PlankTheme]
+TopRoundness=22
+BottomRoundness=22
+LineWidth=1
+OuterStrokeColor=0;;0;;0;;30
+FillStartColor=$dock_fill
+FillEndColor=$dock_fill
+InnerStrokeColor=$dock_edge
+
+[PlankDockTheme]
+HorizPadding=2
+TopPadding=3
+BottomPadding=3
+ItemPadding=4
+IndicatorSize=4
+IconShadowSize=1
+UrgentBounceHeight=2
+LaunchBounceHeight=0.7
+FadeOpacity=1
+ClickTime=300
+UrgentBounceTime=600
+LaunchBounceTime=600
+ActiveTime=300
+SlideTime=200
+FadeTime=250
+HideTime=200
+GlowSize=0
+GlowTime=0
+GlowPulseTime=0
+UrgentHueShift=150
+ItemMoveTime=200
+CascadeHide=true
+BadgeColor=255;;59;;48;;255
+EOF
+gsettings set net.launchpad.plank.dock.settings:/net/launchpad/plank/docks/dock1/ theme "mintosh-$m" 2>/dev/null
+
+# Spotlight and Launchpad (rofi) and notifications in glass
+R="$HOME/.local/share/rofi/themes"; mkdir -p "$R"
+cat > "$R/spotlight.rasi" <<EOF
+* { font: "Inter 13"; bg: $glass_hex; fg: $fg; dim: $dim; sel: $accent; selfg: #ffffff;
+    background-color: transparent; text-color: @fg; }
+window { location: north; anchor: north; y-offset: 24%; width: 680px; padding: 0;
+         border: 1px; border-color: $line; border-radius: 26px; background-color: @bg; }
+mainbox { children: [ inputbar, listview ]; spacing: 0; }
+inputbar { children: [ icon-search, entry ]; spacing: 12px; padding: 14px 20px; }
+icon-search { expand: false; filename: "system-search-symbolic"; size: 22px; vertical-align: 0.5; }
+entry { font: "Inter Light 21"; placeholder-color: @dim; vertical-align: 0.5; }
+listview { require-input: true; lines: 8; fixed-height: false; scrollbar: false; spacing: 0;
+           padding: 6px 10px 10px; border: 1px 0 0 0; border-color: $line; }
+element { padding: 6px 12px; spacing: 10px; border-radius: 12px; }
+element selected.normal { background-color: @sel; text-color: @selfg; }
+element-icon { size: 22px; }
+element-text { text-color: inherit; vertical-align: 0.5; highlight: bold; }
+EOF
+cat > "$R/launchpad.rasi" <<EOF
+* { font: "Inter 12"; background-color: transparent; text-color: #ffffff; }
+/* Whole screen; Esc, F4 or a pinch closes it. Background: the blurred wallpaper, dimmed, as on macOS */
+window { fullscreen: true; background-color: #2c2c2e; }
+mainbox { children: [ inputbar, listview ]; spacing: 36px; padding: 6% 9%; background-color: $([ $m = dark ] && echo '#00000066' || echo '#00000033'); }
+inputbar { children: [ entry ]; margin: 0 38%; padding: 7px 14px; border-radius: 12px; background-color: #ffffff2e;
+           border: 1px; border-color: #ffffff40; }
+entry { placeholder-color: #ffffffb3; horizontal-align: 0.5; }
+listview { columns: 7; lines: 4; flow: horizontal; fixed-columns: true; spacing: 20px; scrollbar: false; }
+element { orientation: vertical; padding: 10px 6px; spacing: 8px; border-radius: 18px; }
+element selected.normal { background-color: #ffffff33; }
+element-icon { size: 64px; horizontal-align: 0.5; }
+element-text { horizontal-align: 0.5; text-color: inherit; }
+EOF
+rm -f "$HOME/.cache/launchpad-bg.jpg"   # remade from the new wallpaper on next open
+N="$HOME/.local/share/themes/mintosh-$m/xfce-notify-4.0"; mkdir -p "$N"
+cat > "$N/gtk.css" <<EOF
+#XfceNotifyWindow { background-color: $glass; border: 1px solid $edge; border-radius: 22px; padding: 12px 14px; }
+#XfceNotifyWindow label#summary { font-weight: 600; color: $fg; }
+#XfceNotifyWindow label#body { color: $fg; opacity: 0.85; }
+#XfceNotifyWindow image#icon { margin-right: 8px; }
+#XfceNotifyWindow button { border-radius: 10px; }
+EOF
+X xfce4-notifyd /theme string "mintosh-$m"
+
+# Wallpapers: the light or dark set, rotating hourly within it
+W="$HOME/.local/share/backgrounds/mintosh/$m"
+first=$(ls "$W"/*.jpg 2>/dev/null | head -1)
+if [ -n "$first" ]; then
+  for p in $(xfconf-query -c xfce4-desktop -l | grep -E "workspace[0-9]+/last-image$"); do
+    cur=$(xfconf-query -c xfce4-desktop -p "$p")
+    case "$cur" in "$W"/*) ;; *) X xfce4-desktop "$p" string "$first" ;; esac
+  done
+fi
+echo "Appearance: $choice ($m)"

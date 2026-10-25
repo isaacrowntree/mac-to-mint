@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Launchpad-style grid of all apps; F4 again or Esc closes it
+pkill -x rofi && exit 0
+case "${LANG:-}" in es*) ph="Buscar";; *) ph="Search";; esac
+# Blurred wallpaper at exactly the screen size, made once (scaling a bigger image left a strip uncovered)
+BG="$HOME/.cache/launchpad-bg.jpg"
+if [ ! -s "$BG" ] && command -v convert >/dev/null; then
+  size=$(xrandr 2>/dev/null | awk '/\*/{print $1; exit}'); size=${size:-1366x768}
+  # the current wallpaper (appearance clears this cache when light/dark switches the wallpaper set)
+  src=$(xfconf-query -c xfce4-desktop -l -v 2>/dev/null | awk '/workspace0\/last-image/{print $2; exit}')
+  [ -f "$src" ] || src=/usr/share/backgrounds/macos/login-blur.jpg
+  convert "$src" -resize "$size^" -gravity center -extent "$size" -blur 0x20 "$BG" 2>/dev/null
+fi
+# (rofi refuses a background-image in -theme-str next to another rule, so it goes in a small theme of its own)
+T="$HOME/.cache/launchpad.rasi"
+{ echo "@import \"$HOME/.local/share/rofi/themes/launchpad.rasi\""; [ -s "$BG" ] && echo "window { background-image: url(\"$BG\", width); }"; } > "$T"
+# Apps only, like Launchpad: settings panels and system tools (Terminal...) stay in System Settings / Spotlight
+# One click opens an app, as on a Mac (rofi's default is click to select, double-click to open)
+exec rofi -show drun -show-icons -drun-use-desktop-cache -drun-display-format '{name}' -theme "$T" \
+  -me-select-entry '' -me-accept-entry MousePrimary \
+  -drun-categories Office,Network,Graphics,AudioVideo,Audio,Video,Game,Education,Utility \
+  -theme-str "entry { placeholder: \"$ph\"; }"

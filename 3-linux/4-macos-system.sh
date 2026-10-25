@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Run on the Mint install after 3-macos-look.sh (it uses the WhiteSur files that script downloads):
+# Run on the Mint install after 3-macos-look.sh (it uses the MacTahoe files that script downloads):
 #   sudo bash 4-macos-system.sh
 # Mac-like boot (black screen, Apple logo, progress bar, no GRUB menu), Mac-like login screen (blurred wallpaper,
-# round account picture, WhiteSur theme), Mac trackpad behaviour, battery saving, and the tools scripts 3/5 use.
+# round account picture), Mac trackpad behaviour, battery saving, glass blur (picom), and the tools scripts 3/5 use.
 # Account picture: 3-linux/mac-assets/avatar.png (0-send-from-mac.sh makes it from a macOS default picture).
 # Safe to re-run. Log out (trackpad, login screen) or reboot (boot screen) to see the changes.
 set -uo pipefail
@@ -11,11 +11,12 @@ cd "$(dirname "$0")"
 U="${SUDO_USER:?run with sudo from the user account}"; UH=$(getent passwd "$U" | cut -d: -f6)
 log() { printf '\n==> %s\n' "$*"; }
 APPLE=$(grep -qi apple /sys/class/dmi/id/sys_vendor 2>/dev/null && echo 1 || echo 0)
-LOGO="$UH/.cache/whitesur-src/WhiteSur-gtk-theme/src/assets/gnome-shell/activities/activities-apple.svg"
+LOGO="$UH/.cache/mintosh-src/MacTahoe-gtk-theme/src/assets/gnome-shell/activities/activities-apple.svg"
 
 log "Tools: Spotlight search (rofi), screenshots, notifications, image tools, battery saver (TLP)"
 apt-get install -y rofi xfce4-screenshooter libnotify-bin imagemagick librsvg2-bin plymouth-themes tlp \
-  zenity xfce4-appmenu-plugin appmenu-gtk3-module appmenu-gtk2-module appmenu-registrar touchegg wmctrl
+  zenity xfce4-appmenu-plugin appmenu-gtk3-module appmenu-gtk2-module appmenu-registrar touchegg wmctrl \
+  picom mesa-utils python3-gi gir1.2-gtk-3.0 gir1.2-wnck-3.0   # glass blur; Mission Control
 
 if [ "$APPLE" = 1 ]; then
   log "Battery saver: keep TLP away from the SATA link and Wi-Fi power saving (they freeze Apple SSDs / drop Wi-Fi)"
@@ -87,8 +88,8 @@ update-grub
 
 log "Login screen like macOS"
 # The greeter runs as another user, so the theme, icons and cursor must be installed system-wide
-cp -a "$UH/.themes/WhiteSur-Light" /usr/share/themes/ 2>/dev/null || echo "   (WhiteSur theme not found)"
-for d in "$UH"/.local/share/icons/WhiteSur* "$UH"/.icons/WhiteSur*; do [ -d "$d" ] && cp -a "$d" /usr/share/icons/; done
+for d in "$UH"/.themes/MacTahoe-Light "$UH"/.themes/MacTahoe-Dark; do [ -d "$d" ] && cp -a "$d" /usr/share/themes/; done
+for d in "$UH"/.local/share/icons/MacTahoe* "$UH"/.icons/MacTahoe*; do [ -d "$d" ] && cp -a "$d" /usr/share/icons/; done
 S=/usr/share/backgrounds/macos; mkdir -p "$S"
 WP="$S/Sonoma-light.jpg"; [ -f "$WP" ] || WP="$UH/.local/share/backgrounds/macos/Sonoma-light.jpg"
 convert "$WP" -resize 1920x1080^ -gravity center -extent 1920x1080 -blur 0x40 "$S/login-blur.jpg" \
@@ -101,9 +102,9 @@ setg draw-user-backgrounds false
 setg draw-grid false
 setg show-hostname false
 setg show-a11y false
-setg theme-name WhiteSur-Light
-setg icon-theme-name WhiteSur-light
-setg cursor-theme-name WhiteSur-cursors
+setg theme-name MacTahoe-Light
+setg icon-theme-name MacTahoe-light
+setg cursor-theme-name MacTahoe-cursors
 setg cursor-theme-size 32
 setg font-name "Inter 12"
 setg clock-format "%a %-d %b  %-l:%M %p"
@@ -114,7 +115,7 @@ setg clock-format "%a %-d %b  %-l:%M %p"
 apt-get install -y lightdm-gtk-greeter
 LT=/usr/share/themes/macOS-Login/gtk-3.0; mkdir -p "$LT"
 cat > "$LT/gtk.css" <<'EOF'
-/* Plain GTK base, not WhiteSur: its entry rules beat these and left the password dots dark grey */
+/* Plain GTK base, not the macOS theme: its entry rules beat these and left the password dots dark grey */
 @import url("resource:///org/gtk/libgtk/theme/Adwaita/gtk-contained.css");
 * { font-family: "Inter"; }
 #panel_window, #panel_window menubar, #panel_window menubar > menuitem {
@@ -168,8 +169,8 @@ cat > /etc/lightdm/lightdm-gtk-greeter.conf <<EOF
 background=$LBG
 user-background=false
 theme-name=macOS-Login
-icon-theme-name=WhiteSur-light
-cursor-theme-name=WhiteSur-cursors
+icon-theme-name=MacTahoe-light
+cursor-theme-name=MacTahoe-cursors
 cursor-theme-size=32
 font-name=Inter 12
 hide-user-image=true

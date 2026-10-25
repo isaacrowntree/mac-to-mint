@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Trackpad gestures (Touchegg runs these), as on macOS:
+#   pinch / spread with thumb and three fingers = Launchpad / show the desktop (pinch again brings windows back)
+#   left / right with three fingers = the next / previous desktop (fingers left shows the desktop to the right)
+desk() { wmctrl -m | grep -q '"showing the desktop" mode: ON'; }
+case "$1" in
+  pinch)  if desk; then wmctrl -k off; else exec "$HOME/.local/bin/launchpad"; fi ;;
+  spread) if pkill -x rofi; then :; elif desk; then wmctrl -k off; else wmctrl -k on; fi ;;
+  left|right)
+    n=$(wmctrl -d | wc -l); cur=$(wmctrl -d | awk '$2=="*"{print $1}')
+    if [ "$1" = left ]; then to=$((cur + 1)); else to=$((cur - 1)); fi
+    [ "$to" -ge 0 ] && [ "$to" -lt "$n" ] && wmctrl -s "$to" ;;   # no wrap-around, like macOS
+esac
