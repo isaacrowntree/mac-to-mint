@@ -94,6 +94,22 @@ To come back later (re-run scripts 3-5 after changes): `bash tools/open-access.s
 `bash 3-linux/0-send-from-mac.sh user@ip` (no BACKUP_DIR: sends only the scripts), run them, and
 `bash tools/close-access.sh user@ip` to undo the access.
 
+**Can't reach the Mint machine from the helper Mac** (it's online through phone USB tethering, a guest network, or
+its Wi-Fi is dead)? Turn on Remote Login on the helper Mac and run `TUNNEL=1 bash tools/open-access.sh`. The served
+script also installs a `mintosh-tunnel` systemd service that holds a reverse SSH tunnel to the helper Mac, survives
+reboots and reconnects by itself. Its key may only open `localhost:2222` on the Mac: no shell, no other forwards.
+Add this to `~/.ssh/config` and use `user@mintosh` wherever the steps above say `user@ip`:
+```
+Host mintosh
+  HostName localhost
+  Port 2222
+  HostKeyAlias mintosh
+  IdentityFile ~/.ssh/mintosh
+  IdentitiesOnly yes
+```
+`bash tools/close-access.sh user@mintosh` removes the tunnel and its key on both machines. Through an Android
+phone's tethering the copy ran at ~36 MB/s (the phone stays on home Wi-Fi, not mobile data).
+
 > **Safety:** `open-access.sh` serves its script over plain HTTP on your local network, and running it gives the
 > helper Mac SSH access with password-free sudo. Use it only on a network you trust, keep the server running only
 > until the command has been run, and always finish with `close-access.sh`. Read the served script before running
@@ -152,13 +168,14 @@ Keep a second copy of `organized/` + `converted/` before deleting the raw backup
   (its real black rounded-square icon), so either is one click away.
   The Apple logo and the Gemini and Grok icons are downloaded at run time (MacTahoe source, gstatic, grok.com), not stored here.
 
-## Hardware notes (MacBookAir6,1, 2013) - most apply to 2013-2015 MacBooks
+## Hardware notes (MacBookAir6,1 and 6,2, 2013-14) - most apply to 2013-2015 MacBooks
 | Problem | Fix (in `1-system-setup.sh`, gated on the hardware) |
 |---|---|
 | SSD invisible to the installer; `ata1: failed to IDENTIFY` (Marvell 88SS9183, `1b4b:9183`) | boot with `intel_iommu=off`; after install, `sudo IOMMU_OFF=1 bash 1-system-setup.sh` makes it permanent |
 | Desktop freezes after ~1 h, hundreds of `ata1: hard resetting link`, I/O errors (Toshiba `APPLE SSD TS0256F`) | SATA link power saving off: `ahci.mobile_lpm_policy=1` (automatic for `APPLE SSD TS*`; `LPM_OFF=1` forces it) |
 | `ata1: exception ... PHYRdyChg`, link slows to 3 then 1.5 Gb/s within a minute of boot (SanDisk `APPLE SSD SD0256F`) | the opposite: this SSD needs link power saving **on** - leave out `ahci.mobile_lpm_policy=1` (`LPM_OFF=0` removes it) |
 | No Wi-Fi in the installer (Broadcom BCM4360) | `bcmwl-kernel-source` (on the Mint ISO); Driver Manager in the live session |
+| No Wi-Fi at all: no `14e4:43a0` in `lspci`, `00:1c.2: retraining failed` at boot, Bluetooth still works | the Wi-Fi chip on the card has died - see below |
 | No camera (FaceTime HD, `14e4:1570`) | `facetimehd` driver + firmware via DKMS |
 | Runs hot | `mbpfan` |
 | Top-row keys | work by default (`hid_apple fnmode=3`); pop-ups need enabling (script 3) |
@@ -168,6 +185,22 @@ Script 4 writes `/etc/tlp.d/90-apple.conf` on Apple hardware: AHCI runtime PM of
 `SATA_LINKPWR_ON_*=max_performance` only when GRUB has `ahci.mobile_lpm_policy=1`, so TLP and GRUB always agree.
 
 `libata.force=noncq,1.5Gbps` is **not** needed - with the right options for the SSD it runs at 6 Gb/s with NCQ.
+
+**A dead Wi-Fi card** (Silvana's Air): under macOS it first crashed under sustained transfers (`wl0: fatal error,
+reinitializing`, then `dead chip, off[0] bar0[0xffffffff]`), then vanished from the PCI bus. On Linux the slot
+(root port `00:1c.2`, ACPI `\_SB.PCI0.RP03.ARPT`) sees a card present (`PresDet+`) but the link never trains
+(`Width x0`, `DLActive-`). The card is the 2013-17 Air combo card (Wi-Fi on PCIe, Bluetooth on USB), so working
+Bluetooth means the card is seated and powered and only the Wi-Fi chip is gone. Nothing in software brings it back:
+link retrain, secondary bus reset, rescan, and a full firmware power cycle (`acpi_call`: `ARPT.PDEN 1`, `RP03._PS3`,
+`RP03._PS0`, which switches the card's supply `EC.APWC` off and on with five link attempts) all fail. An SMC reset
+doesn't help either.
+
+Fix: replace the card - **BCM94360CS2**, Apple part **653-0023** (same card in every 11"/13" Air 2013-2017; not the
+2012 BCM943224PCIEBT2). About A$17-25 used on eBay AU; listings "to NGFF/M.2" or "1PCS Card for BCM94360CS2" at
+$9-13 are adapters, not the card. Tools: **P5 pentalobe** (bottom case, 10 screws, two longer at the hinge) and
+**T5 Torx** (one screw on the card). Unplug the battery first; the two antenna leads pop straight up. Script 1 only
+installs the driver when it sees the card, so on a machine with a dead card install it before the swap:
+`sudo apt install bcmwl-kernel-source`.
 
 ## Known issues (fixed)
 - **The global menu crashed when a Chrome window moved to another desktop** ("plugin unexpectedly left the panel").
