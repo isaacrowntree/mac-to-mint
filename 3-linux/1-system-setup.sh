@@ -5,6 +5,7 @@
 # and the fixes old Macs need (each one only runs when its hardware is present).
 # Time zone is left as chosen in the installer. English only by default; for a second language the user can switch
 # to in Settings > Languages, pass it: sudo LANG2=es_CO bash 1-system-setup.sh   (or fr_FR, de_DE, pt_BR, ...)
+# IOMMU_OFF=1 adds intel_iommu=off, for the Marvell SSDs in some 2013-14 Macs that otherwise fail to boot.
 set -uo pipefail
 cd "$(dirname "$0")"
 [ "$(id -u)" = 0 ] || { echo "Run with sudo"; exit 1; }
@@ -13,13 +14,21 @@ has_pci() { lspci -nn | grep -qi "$1"; }
 APPLE=$(grep -qi apple /sys/class/dmi/id/sys_vendor 2>/dev/null && echo 1 || echo 0)
 LANG2="${LANG2:-}"; L2="${LANG2%%_*}"
 
-if has_pci '1b4b:9183'; then
-  log "SSD: Marvell 88SS9183 (2013-14 MacBook Air/Pro) fails to IDENTIFY with the Intel IOMMU on"
+if [ -n "${IOMMU_OFF:-}" ]; then
+  log "SSD: Intel IOMMU off (some Marvell 88SS9183 SSDs in 2013-14 MacBook Air/Pro fail to IDENTIFY with it on)"
   grep -q intel_iommu=off /etc/default/grub || sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="/&intel_iommu=off /' /etc/default/grub
+elif has_pci '1b4b:9183'; then
+  echo "   Marvell 88SS9183 SSD: if it fails to boot with 'failed to IDENTIFY' errors (seen on Toshiba TS0256F), re-run with IOMMU_OFF=1"
 fi
-if [ "$APPLE" = 1 ]; then
-  log "Apple SSDs drop the SATA link (freezes, I/O errors) with link power saving on - keep it off"
+# SATA link power saving depends on who made the SSD: Toshiba (APPLE SSD TS...) drops the link with it on (freezes
+# after ~1 h), SanDisk (APPLE SSD SD...) drops it with it OFF (errors within a minute, link slows to 1.5 Gb/s).
+# LPM_OFF=1 / LPM_OFF=0 overrides the guess.
+SSD=$(cat /sys/block/sda/device/model 2>/dev/null)
+if [ "${LPM_OFF:-}" = 1 ] || { [ -z "${LPM_OFF:-}" ] && [[ "$SSD" == "APPLE SSD TS"* ]]; }; then
+  log "SSD ($SSD): drops the SATA link (freezes, I/O errors) with link power saving on - keep it off"
   grep -q mobile_lpm_policy /etc/default/grub || sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="/&ahci.mobile_lpm_policy=1 /' /etc/default/grub
+elif [ "${LPM_OFF:-}" = 0 ]; then
+  sed -i 's/ahci.mobile_lpm_policy=1 //' /etc/default/grub
 fi
 update-grub
 
@@ -47,6 +56,9 @@ apt-get install -y libreoffice libreoffice-help-en-us mythes-en-us \
   plank git sassc libglib2.0-dev-bin libxml2-utils xdotool \
   convmv rsync openssh-server
 [ -z "$L2" ] || apt-get install -y "libreoffice-l10n-$L2" "libreoffice-help-$L2" "hyphen-$L2" "mythes-$L2" || true
+
+log "iPhone photos (HEIC) open and show thumbnails like JPGs"
+apt-get install -y heif-gdk-pixbuf heif-thumbnailer || true
 
 log "Chrome"
 DEB=google-chrome-stable_current_amd64.deb
@@ -88,7 +100,10 @@ if has_pci '14e4:1570'; then
   (cd "$F/firmware" && make && make install) || echo "!! camera firmware failed"
   V=$(grep -oP '^PACKAGE_VERSION="?\K[^"]+' "$F/driver/dkms.conf")
   rm -rf "/usr/src/facetimehd-$V" && cp -r "$F/driver" "/usr/src/facetimehd-$V"
-  dkms add -m facetimehd -v "$V" && dkms install -m facetimehd -v "$V" && modprobe facetimehd || echo "!! camera driver failed (check kernel support)"
+  # On a re-run it's already added/installed (captured, not piped to grep -q: SIGPIPE fails it under pipefail)
+  { [ -n "$(dkms status -m facetimehd -v "$V" 2>/dev/null)" ] || dkms add -m facetimehd -v "$V"; } &&
+    { [[ "$(dkms status -m facetimehd -v "$V" -k "$(uname -r)" 2>/dev/null)" == *installed* ]] || dkms install -m facetimehd -v "$V"; } &&
+    modprobe facetimehd || echo "!! camera driver failed (check kernel support)"
 fi
 
 log "Login screen: macOS Sonoma-style wallpaper (WhiteSur recreation)"

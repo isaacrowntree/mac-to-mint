@@ -19,17 +19,19 @@ apt-get install -y rofi xfce4-screenshooter libnotify-bin imagemagick librsvg2-b
   picom mesa-utils python3-gi gir1.2-gtk-3.0 gir1.2-wnck-3.0   # glass blur; Mission Control
 
 if [ "$APPLE" = 1 ]; then
-  log "Battery saver: keep TLP away from the SATA link and Wi-Fi power saving (they freeze Apple SSDs / drop Wi-Fi)"
-  cat > /etc/tlp.d/90-apple.conf <<'EOF'
-# Apple SSDs drop the SATA link with link power management on (see ahci.mobile_lpm_policy=1 in GRUB)
-SATA_LINKPWR_ON_AC="max_performance"
-SATA_LINKPWR_ON_BAT="max_performance"
+  log "Battery saver: keep TLP away from Wi-Fi power saving (drops Wi-Fi) and match GRUB's SATA link setting"
+  {
+    # Script 1 turns SATA link power saving off only for SSDs that need it; TLP must not turn it back on
+    grep -q ahci.mobile_lpm_policy=1 /etc/default/grub &&
+      printf '# The SSD drops the SATA link with link power management on (ahci.mobile_lpm_policy=1 in GRUB)\nSATA_LINKPWR_ON_AC="max_performance"\nSATA_LINKPWR_ON_BAT="max_performance"\n'
+    cat <<'EOF'
 AHCI_RUNTIME_PM_ON_AC=on
 AHCI_RUNTIME_PM_ON_BAT=on
 # Wi-Fi power saving is off in NetworkManager too (99-wifi-powersave-off.conf)
 WIFI_PWR_ON_AC=off
 WIFI_PWR_ON_BAT=off
 EOF
+  } > /etc/tlp.d/90-apple.conf
 fi
 systemctl enable --now tlp
 

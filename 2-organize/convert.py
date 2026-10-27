@@ -126,12 +126,18 @@ def notes():
     d = os.path.join(OUT, "notes")
     os.makedirs(d, exist_ok=True)
     for i, (title, blob) in enumerate(rows, 1):
-        raw = gzip.decompress(blob) if blob[:2] == b"\x1f\x8b" else zlib.decompress(blob)
+        if not blob:  # locked or emptied notes have no body
+            continue
+        raw =gzip.decompress(blob) if blob[:2] == b"\x1f\x8b" else zlib.decompress(blob)
         # Note body is protobuf; the text is the longest UTF-8 run. Good enough for plain notes.
         runs = re.findall(rb"[\x09\x0a\x0d\x20-\x7e\xc2-\xf4][\x09\x0a\x0d\x20-\x7e\x80-\xbf\xc2-\xf4]{8,}", raw)
         text = max(runs, key=len).decode("utf-8", "replace") if runs else ""
         safe = re.sub(r'[/\\:*?"<>|]', "_", title)[:60] or f"nota-{i}"
-        open(os.path.join(d, f"{safe}.txt"), "w", encoding="utf-8").write(text)
+        path, n = os.path.join(d, f"{safe}.txt"), 1
+        while os.path.exists(path):  # same title twice
+            n += 1
+            path = os.path.join(d, f"{safe} ({n}).txt")
+        open(path, "w", encoding="utf-8").write(text)
     return f"{len(rows)} notes -> notes/"
 
 
@@ -139,12 +145,21 @@ def mail():
     d = os.path.join(OUT, "mail-archive")
     os.makedirs(d, exist_ok=True)
     total = 0
-    for mbox in glob.glob(os.path.join(LIB, "Mail/V4/*/*.mbox")):
-        # os.walk, not glob: folder names like "[Gmail].mbox" are glob patterns
-        files = sorted(os.path.join(r, f) for r, _, fs in os.walk(mbox) for f in fs if f.endswith(".emlx"))
+    # V4 = Sierra, V5 = High Sierra, V6 = Mojave, ...; mailboxes nest ("[Gmail].mbox/All Mail.mbox")
+    mboxes = [r for v in glob.glob(os.path.join(LIB, "Mail/V[0-9]*")) for r, _, _ in os.walk(v) if r.endswith(".mbox")]
+    names = {}
+    for mbox in mboxes:
+        # os.walk, not glob: folder names like "[Gmail].mbox" are glob patterns; skip nested mailboxes' mail
+        files = sorted(os.path.join(r, f) for r, _, fs in os.walk(mbox) for f in fs if f.endswith(".emlx")
+                       and os.path.relpath(r, mbox).count(".mbox") == 0)
         if not files:
             continue
-        name = os.path.basename(mbox)[:-5].replace("/", "_")
+        # path inside the account folder: Mail/V6/<account>/[Gmail].mbox/All Mail.mbox -> "[Gmail]_All Mail"
+        inner = os.path.relpath(mbox, os.path.join(LIB, "Mail")).split(os.sep)[2:]
+        name = re.sub(r'[/\\:*?"<>|]', "_", "_".join(p[:-5] for p in inner))
+        names[name] = names.get(name, 0) + 1
+        if names[name] > 1:  # same folder name in two accounts
+            name += f" ({names[name]})"
         with open(os.path.join(d, name + ".mbox"), "wb") as out:
             for p in files:
                 with open(p, "rb") as f:

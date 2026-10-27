@@ -121,7 +121,7 @@ Keep a second copy of `organized/` + `converted/` before deleting the raw backup
   Settings, Appearance, App Store, Force Quit, Sleep, Restart, Shut Down, Lock Screen, Log Out, with separators), then the
   global menu (`xfce4-appmenu-plugin`: active app's name in bold + its File/Edit/View menus, out of the window;
   works for Chrome, LibreOffice and GTK apps). Right side as on macOS: keyboard layout, tray icons, Wi-Fi, volume,
-  battery %, "Sun 25 Oct 3:42 PM", Search, Gemini. Regular-weight text. Mint's Firefox/Terminal/Files
+  battery %, "Sun 25 Oct 3:42 PM", Search, Gemini, Grok. Regular-weight text. Mint's Firefox/Terminal/Files
   launchers, show-desktop, window buttons and Languages button are removed.
 - **Spotlight (⌘Space) and Launchpad (F4, dock):** rofi, not Ulauncher: it starts on demand and exits, so it uses no
   memory while closed (Ulauncher stays resident, ~100 MB+, too much for 4 GB). Spotlight: Sonoma-style bar, results
@@ -145,26 +145,29 @@ Keep a second copy of `organized/` + `converted/` before deleting the raw backup
 - **Chrome language:** at each login Chrome's website languages are set from the system language (e.g. es-CO
   first when the system is switched to Spanish) and the Translate pop-up is off for those languages. Chrome must be closed for this.
 - **Gemini:** Google's assistant as its own app window (Chrome `--app`), with a button at the far right of the menu
-  bar where Siri was on macOS 10.12 (sparkle on a white circle so it shows on any wallpaper). There's no
+  bar where Siri was on macOS 10.12 (the real sparkle; menu bar icons are 22 px so it isn't tiny). There's no
   Gemini desktop app for Linux. Chrome's built-in "Gemini in Chrome" and its dictation into web text boxes
   ("Talk to type", Chrome 156) are rolling out by country; Linux availability is unclear, so check Chrome itself.
-  The Apple logo and Gemini icon are downloaded at run time (MacTahoe source, gstatic), not stored here.
+- **Grok:** xAI's assistant the same way (Chrome `--app=https://grok.com/`), its button right next to Gemini's
+  (its real black rounded-square icon), so either is one click away.
+  The Apple logo and the Gemini and Grok icons are downloaded at run time (MacTahoe source, gstatic, grok.com), not stored here.
 
 ## Hardware notes (MacBookAir6,1, 2013) - most apply to 2013-2015 MacBooks
 | Problem | Fix (in `1-system-setup.sh`, gated on the hardware) |
 |---|---|
-| SSD invisible to the installer; `ata1: failed to IDENTIFY` (Marvell 88SS9183, `1b4b:9183`) | boot with `intel_iommu=off` |
-| Desktop freezes after ~1 h, hundreds of `ata1: hard resetting link`, I/O errors | SATA link power saving off: `ahci.mobile_lpm_policy=1` |
+| SSD invisible to the installer; `ata1: failed to IDENTIFY` (Marvell 88SS9183, `1b4b:9183`) | boot with `intel_iommu=off`; after install, `sudo IOMMU_OFF=1 bash 1-system-setup.sh` makes it permanent |
+| Desktop freezes after ~1 h, hundreds of `ata1: hard resetting link`, I/O errors (Toshiba `APPLE SSD TS0256F`) | SATA link power saving off: `ahci.mobile_lpm_policy=1` (automatic for `APPLE SSD TS*`; `LPM_OFF=1` forces it) |
+| `ata1: exception ... PHYRdyChg`, link slows to 3 then 1.5 Gb/s within a minute of boot (SanDisk `APPLE SSD SD0256F`) | the opposite: this SSD needs link power saving **on** - leave out `ahci.mobile_lpm_policy=1` (`LPM_OFF=0` removes it) |
 | No Wi-Fi in the installer (Broadcom BCM4360) | `bcmwl-kernel-source` (on the Mint ISO); Driver Manager in the live session |
 | No camera (FaceTime HD, `14e4:1570`) | `facetimehd` driver + firmware via DKMS |
 | Runs hot | `mbpfan` |
 | Top-row keys | work by default (`hid_apple fnmode=3`); pop-ups need enabling (script 3) |
 
 **TLP undoes the SATA fix** unless told not to: its defaults turn SATA link power management back on on battery.
-Script 4 writes `/etc/tlp.d/90-apple.conf` (`SATA_LINKPWR_ON_BAT=max_performance`, AHCI runtime PM off, Wi-Fi
-power saving off) on Apple hardware.
+Script 4 writes `/etc/tlp.d/90-apple.conf` on Apple hardware: AHCI runtime PM off, Wi-Fi power saving off, and
+`SATA_LINKPWR_ON_*=max_performance` only when GRUB has `ahci.mobile_lpm_policy=1`, so TLP and GRUB always agree.
 
-`libata.force=noncq,1.5Gbps` is **not** needed - with the two options above the SSD runs at 6 Gb/s with NCQ.
+`libata.force=noncq,1.5Gbps` is **not** needed - with the right options for the SSD it runs at 6 Gb/s with NCQ.
 
 ## Known issues (fixed)
 - **The global menu crashed when a Chrome window moved to another desktop** ("plugin unexpectedly left the panel").

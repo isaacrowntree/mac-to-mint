@@ -201,7 +201,7 @@ panel_restart
 log "Top panel as a menu bar"
 X xfce4-panel /panels/panel-1/position string "p=6;x=0;y=0"
 X xfce4-panel /panels/panel-1/size uint 30     # already taller than macOS's bar (24); bigger text, not a bigger bar
-X xfce4-panel /panels/panel-1/icon-size uint 18
+X xfce4-panel /panels/panel-1/icon-size uint 22   # Xfce has one size for all; 22 so Gemini/Grok aren't tiny
 
 log "Gemini (Google's assistant) as its own app - type, or tap the microphone to talk"
 # Google's coloured Gemini sparkle; the vector one stays sharp at the menu bar's small size
@@ -209,11 +209,8 @@ G="$HOME/.local/share/icons/hicolor/512x512/apps"; mkdir -p "$G"
 curl -fsSL -o "$I/google-gemini.svg" https://www.gstatic.com/lamda/images/gemini_sparkle_v002_d4735304ff6292a690345.svg \
   || curl -fsSL -o "$G/google-gemini.png" https://www.gstatic.com/lamda/images/gemini_sparkle_4g_512_lt_f94943af3be039176192d.png \
   || echo "   (icon download failed; the menu entry uses a generic icon)"
-# Menu bar version: the sparkle on a small white circle, so it shows on any wallpaper (blue on blue vanished)
-if [ -s "$I/google-gemini.svg" ]; then
-  printf '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="14" fill="#fff"/><g transform="translate(5.5 5.5) scale(0.607)">%s</g></svg>\n' \
-    "$(sed -e '1s/<svg[^>]*>//' -e 's#</svg>##' "$I/google-gemini.svg" | tr -d '\n')" > "$I/google-gemini-panel.svg"
-fi
+# Menu bar version: the real sparkle, edge to edge (a white circle behind it made it look small and not quite Gemini)
+[ -s "$I/google-gemini.svg" ] && cp "$I/google-gemini.svg" "$I/google-gemini-panel.svg"
 gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
 cat > "$A/gemini.desktop" <<'EOF'
 [Desktop Entry]
@@ -226,6 +223,30 @@ Icon=google-gemini
 Categories=Utility;
 StartupWMClass=gemini.google.com__app
 EOF
+log "Grok (xAI's assistant) as its own app, with a button next to Gemini's"
+# Menu bar version: the real app icon (black rounded square, white mark), edge to edge, built from the plain vector
+# paths in grok.com's favicon (the favicon itself has a blur layer GTK can't draw; a scaled PNG blurred)
+curl -fsSL -o "$G/xai-grok.png" https://grok.com/images/android-chrome-512x512.png \
+  || echo "   (icon download failed; the menu entry uses a generic icon)"
+FAV=$(curl -fsSL https://grok.com/images/favicon.svg)
+SQ=$(grep -o '<path d="M0 256C[^"]*" fill="#050505"/>' <<<"$FAV" | head -1)
+MARK=$(grep -o '<path d="[^"]*" fill="#FCFCFC"/>' <<<"$FAV" | tr -d '\n')
+if [ -n "$SQ" ] && [ -n "$MARK" ]; then
+  printf '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 512 512">%s%s</svg>\n' \
+    "$SQ" "$MARK" > "$I/xai-grok-panel.svg"
+fi
+gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
+cat > "$A/grok.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Grok
+Comment=Ask xAI's AI assistant
+Comment[es]=Pregúntele al asistente de xAI
+Exec=google-chrome --app=https://grok.com/
+Icon=xai-grok
+Categories=Utility;
+StartupWMClass=grok.com
+EOF
 cat > "$A/spotlight.desktop" <<EOF
 [Desktop Entry]
 Type=Application
@@ -237,9 +258,10 @@ NoDisplay=true
 StartupNotify=false
 EOF
 
-log "Menu bar right side like macOS Sierra: ES/US, Wi-Fi, volume, battery %, 'Sat 25 Oct 3:42 PM', Search, Gemini (where Siri was)"
-# Search (magnifier, opens Spotlight) and Gemini buttons at the far right, as Spotlight and Siri were on macOS 10.12
-for f in "spotlight:$B/spotlight" "gemini:gemini.google.com"; do
+log "Menu bar right side like macOS Sierra: ES/US, Wi-Fi, volume, battery %, 'Sat 25 Oct 3:42 PM', Search, Gemini + Grok (where Siri was)"
+# Search (magnifier, opens Spotlight), then Gemini and Grok side by side at the far right, as Spotlight and Siri were
+# on macOS 10.12
+for f in "spotlight:$B/spotlight" "gemini:gemini.google.com" "grok:grok.com"; do
   grep -qs "^Exec=.*${f#*:}" "$HOME"/.config/xfce4/panel/launcher-*/*.desktop \
     || { timeout 20 xfce4-panel --add=launcher "$A/${f%%:*}.desktop"; sleep 1; }
 done
@@ -260,9 +282,11 @@ for p in $(apple_menus); do
   X xfce4-panel "$p/show-tooltips" bool false
   X xfce4-panel "$p/show-generic-names" bool false
 done
-# The Gemini button keeps the icon of the .desktop copy the panel made when it was added; refresh it
+# The Gemini and Grok buttons keep the icon of the .desktop copy the panel made when it was added; refresh them
 [ -s "$I/google-gemini-panel.svg" ] && \
   sed -i -E 's/^Icon=(google-)?gemini$/Icon=google-gemini-panel/' "$HOME"/.config/xfce4/panel/launcher-*/*.desktop 2>/dev/null
+[ -s "$I/xai-grok-panel.svg" ] && \
+  sed -i -E 's/^Icon=xai-grok$/Icon=xai-grok-panel/' "$HOME"/.config/xfce4/panel/launcher-*/*.desktop 2>/dev/null
 sleep 2   # the panel ignores --add while it is still taking in the launchers above
 # Global menu (from script 4): the active app's name in bold and its menus (File, Edit, View...) in the top bar,
 # taken out of the app's window, as on a Mac. Works for Chrome, LibreOffice, Files and other GTK apps.
@@ -318,17 +342,18 @@ for id in $ids; do
   fi
   if [ "$t" = launcher ] && grep -qs "^Exec=$B/spotlight" "$HOME/.config/xfce4/panel/launcher-$id"/*.desktop; then t=search; fi
   if [ "$t" = launcher ] && grep -qs "gemini.google.com" "$HOME/.config/xfce4/panel/launcher-$id"/*.desktop; then t=gemini; fi
+  if [ "$t" = launcher ] && grep -qs "^Exec=.*grok.com" "$HOME/.config/xfce4/panel/launcher-$id"/*.desktop; then t=grok; fi
   if [ "$t" = applicationsmenu ] && [ "$(xfconf-query -c xfce4-panel -p "/plugins/plugin-$id/custom-menu-file" 2>/dev/null)" = "$APPLE_MENU" ]; then
     t=applemenu
   fi
   case "$t" in
     applemenu|appmenu) first[$t]="$id ";;
-    xkb|systray|xapp-status-plugin|pulseaudio|power-manager-plugin|notification-plugin|clock|search|gemini) bytype[$t]+="$id ";;
+    xkb|systray|xapp-status-plugin|pulseaudio|power-manager-plugin|notification-plugin|clock|search|gemini|grok) bytype[$t]+="$id ";;
     *) keep+=("$id");;
   esac
 done
 keep=(${first[applemenu]:-} ${first[appmenu]:-} "${keep[@]}")
-for t in xkb systray xapp-status-plugin pulseaudio power-manager-plugin notification-plugin clock search gemini; do keep+=(${bytype[$t]:-}); done
+for t in xkb systray xapp-status-plugin pulseaudio power-manager-plugin notification-plugin clock search gemini grok; do keep+=(${bytype[$t]:-}); done
 if [ ${#keep[@]} -gt 0 ]; then
   args=(); for id in "${keep[@]}"; do args+=(-t int -s "$id"); done
   xfconf-query -c xfce4-panel -p /panels/panel-1/plugin-ids --force-array "${args[@]}" || echo "   (could not reorder the panel)"
@@ -417,7 +442,7 @@ cat > "$HOME/.config/touchegg/touchegg.conf" <<EOF
   </application>
 </touchégg>
 EOF
-if command -v touchegg >/dev/null; then pkill -x touchegg; (setsid touchegg >/dev/null 2>&1 < /dev/null &); fi
+if command -v touchegg >/dev/null; then pkill -u "$(id -u)" -x touchegg; (setsid touchegg >/dev/null 2>&1 < /dev/null &); fi
 
 log "Spotlight: ⌘Space (Super+Space) opens a centred search bar for apps and files (rofi: no memory used while closed)"
 # Toshy (script 5) turns ⌘Space into Super+Space on Mint and into Ctrl+Esc on other Xfce systems (Xubuntu, ...)
